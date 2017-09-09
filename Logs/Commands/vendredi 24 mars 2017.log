@@ -1,0 +1,57 @@
+##############################
+Log started on 24/03/2017 23:09:21
+
+##############################
+Log started on 24/03/2017 23:09:46
+
+24/03/2017 23:13:04: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go minoc'
+24/03/2017 23:15:02: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go occlo'
+24/03/2017 23:15:06: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go occllo'
+24/03/2017 23:15:12: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go ocllo'
+24/03/2017 23:15:36: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'save '
+24/03/2017 23:15:51: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go minoc'
+24/03/2017 23:16:25: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go britain'
+24/03/2017 23:17:35: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go destard'
+24/03/2017 23:17:41: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go hythloth'
+24/03/2017 23:17:44: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go fire isle'
+24/03/2017 23:17:51: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go magincia'
+24/03/2017 23:18:07: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go vesper'
+24/03/2017 23:18:10: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'tele '
+24/03/2017 23:18:12: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') teleporting to (2943, 621, 0)
+24/03/2017 23:18:19: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go covetous'
+24/03/2017 23:18:24: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go wrong'
+24/03/2017 23:18:37: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go delucia'
+24/03/2017 23:19:03: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go skara'
+24/03/2017 23:19:07: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go skara brae'
+24/03/2017 23:19:12: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go wind'
+24/03/2017 23:19:22: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go yew'
+24/03/2017 23:19:32: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go cove'
+24/03/2017 23:20:39: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'tele '
+24/03/2017 23:20:41: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') teleporting to (2298, 1260, 7)
+24/03/2017 23:20:49: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'tele '
+24/03/2017 23:20:50: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') teleporting to (2293, 1263, 0)
+24/03/2017 23:21:01: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'add '
+24/03/2017 23:21:15: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'Add WoodHouseDeed'
+24/03/2017 23:21:16: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') building at (2305, 1238, 0) in Felucca: "WoodHouseDeed"
+24/03/2017 23:21:16: 127.0.0.1: Serials: 0x400040A2; 
+24/03/2017 23:21:55: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'unhide '
+24/03/2017 23:21:57: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') unhiding 0x24 "ADmin" ('admin')
+24/03/2017 23:22:45: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go minoc'
+24/03/2017 23:22:54: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'save '
+##############################
+Log started on 24/03/2017 23:30:48
+
+24/03/2017 23:31:16: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go cove'
+##############################
+Log started on 24/03/2017 23:42:04
+
+24/03/2017 23:42:23: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go cove'
+24/03/2017 23:43:34: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'admin '
+24/03/2017 23:44:05: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'add '
+24/03/2017 23:44:11: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'Add BrickHouseDeed'
+24/03/2017 23:44:12: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') building at (2306, 1238, 0) in Felucca: "BrickHouseDeed"
+24/03/2017 23:44:12: 127.0.0.1: Serials: 0x400001CF; 
+24/03/2017 23:44:27: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'Add WoodPlasterHouseDeed'
+24/03/2017 23:44:28: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') building at (2306, 1238, 0) in Felucca: "WoodPlasterHouseDeed"
+24/03/2017 23:44:28: 127.0.0.1: Serials: 0x400001E5; 
+24/03/2017 23:44:56: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'admin '
