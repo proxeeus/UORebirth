@@ -141,3 +141,25 @@
 02/04/2020 21:12:26: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go delucia'
 02/04/2020 21:12:39: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go britain'
 02/04/2020 21:14:52: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'save '
+02/04/2020 21:19:37: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go wrong'
+02/04/2020 21:19:42: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go hythloth'
+02/04/2020 21:19:46: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go covetous'
+02/04/2020 21:19:49: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go cove'
+02/04/2020 21:20:20: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go britain'
+02/04/2020 21:20:24: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go minoc'
+02/04/2020 21:20:59: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'remove '
+02/04/2020 21:21:00: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') deleting 0x40079BA6 (Static)
+02/04/2020 21:21:36: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'save '
+02/04/2020 21:30:50: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'spawnerdev add reagents_nerun'
+02/04/2020 21:31:18: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go britain'
+02/04/2020 21:35:08: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go 0 0 0'
+02/04/2020 21:35:31: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go 2854 816 0'
+02/04/2020 21:40:16: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go minoc'
+02/04/2020 21:40:47: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'remove '
+02/04/2020 21:40:48: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') deleting 0x4006D061 (DaemonLair)
+02/04/2020 21:40:52: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'save '
+02/04/2020 22:45:20: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'remove '
+02/04/2020 22:45:22: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') deleting 0x4006C31B (DaemonLair)
+02/04/2020 22:45:51: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'remove '
+02/04/2020 22:45:53: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') deleting 0x4006D785 (DaemonLair)
+02/04/2020 22:46:08: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'save '
