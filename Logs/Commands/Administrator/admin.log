@@ -130,3 +130,14 @@
 09/09/2017 21:40:51: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go '
 09/09/2017 21:41:26: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go '
 09/09/2017 21:41:34: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'save '
+02/04/2020 21:10:12: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go minoc'
+02/04/2020 21:10:47: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'remove '
+02/04/2020 21:10:49: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') deleting 0x4006D270 (DaemonLair)
+02/04/2020 21:11:34: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'remove '
+02/04/2020 21:11:36: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') deleting 0x4006CE98 (DaemonLair)
+02/04/2020 21:11:40: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'save '
+02/04/2020 21:11:58: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'remove '
+02/04/2020 21:12:00: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') deleting 0x4006BCF7 (DaemonLair)
+02/04/2020 21:12:26: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go delucia'
+02/04/2020 21:12:39: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'go britain'
+02/04/2020 21:14:52: 127.0.0.1: Administrator 0x24 "ADmin" ('admin') used command 'save '
