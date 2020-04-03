@@ -187,31 +187,37 @@ namespace Server.Items
 
 		public virtual void GenerateContent()
 		{
-			if( m_Content == null || Deleted )
-				return;
+            try
+            {
+                if (m_Content == null || Deleted)
+                    return;
 
-			int toSpawn = GetSpawnCount();
+                int toSpawn = GetSpawnCount();
+                for (int i = 0; i < toSpawn; ++i)
+                {
+                    Item item = m_Content.Construct();
 
-			for( int i = 0; i < toSpawn; ++i )
-			{
-				Item item = m_Content.Construct();
+                    if (item != null)
+                    {
+                        List<Item> list = this.Items;
 
-				if( item != null )
-				{
-					List<Item> list = this.Items;
+                        for (int j = 0; j < list.Count; ++j)
+                        {
+                            Item subItem = list[j];
 
-					for( int j = 0; j < list.Count; ++j )
-					{
-						Item subItem = list[ j ];
+                            if (!(subItem is Container) && subItem.StackWith(null, item, false))
+                                break;
+                        }
 
-						if( !( subItem is Container ) && subItem.StackWith( null, item, false ) )
-							break;
-					}
-
-					if( item != null && !item.Deleted )
-						DropItem( item );
-				}
-			}
+                        if (item != null && !item.Deleted)
+                            DropItem(item);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(this.GetType() + " === " + ex.Message);
+            }
 		}
 
 		public FillableContainer( Serial serial )
@@ -750,7 +756,6 @@ namespace Server.Items
 
 				index -= entry.Weight;
 			}
-
 			return null;
 		}
 
@@ -798,7 +803,7 @@ namespace Server.Items
 			},
 			new FillableEntry[]
 			{
-				new FillableEntry( 1, typeof( Static ), 0xFC1), // PaintsAndBrush
+				//new FillableEntry( 1, typeof( Static ), 0xFC1), // PaintsAndBrush
 				new FillableEntry( 1, typeof( SledgeHammer ) ),
 				new FillableEntry( 2, typeof( SmithHammer ) ),
 				new FillableEntry( 2, typeof( Tongs ) ),
@@ -864,12 +869,12 @@ namespace Server.Items
 				new FillableEntry( 7, typeof( IronOre ), 0x19B8 ),  // Small Iron Ore
                 new FillableEntry( 7, typeof( IronOre ), 0x19BA ),  // Small Iron Ore
                 new FillableEntry( 8, typeof( IronIngot ) ),
-				new FillableEntry( 1, typeof( Static ), 0x1876 ),   // IronWire 
-                new FillableEntry( 1, typeof( Static ), 0x1877 ),   // SilverWire
-                new FillableEntry( 1, typeof( Static ), 0x1878 ),   // GoldWire
-                new FillableEntry( 1, typeof( Static ), 0x1879 ),   // CopperWire
-				new FillableEntry( 1, typeof( Static ), 0xFB6  ),   // HorseShoes
-				new FillableEntry( 1, typeof( Static ), 0xFB8  )    // ForgedMetal
+				//new FillableEntry( 1, typeof( Static ), 0x1876 ),   // IronWire 
+    //            new FillableEntry( 1, typeof( Static ), 0x1877 ),   // SilverWire
+    //            new FillableEntry( 1, typeof( Static ), 0x1878 ),   // GoldWire
+    //            new FillableEntry( 1, typeof( Static ), 0x1879 ),   // CopperWire
+				//new FillableEntry( 1, typeof( Static ), 0xFB6  ),   // HorseShoes
+				//new FillableEntry( 1, typeof( Static ), 0xFB8  )    // ForgedMetal
 			} );
 
 		public static FillableContent Bowyer = new FillableContent(
@@ -920,8 +925,8 @@ namespace Server.Items
 			},
 			new FillableEntry[]
 			{
-				new FillableEntry( 1, typeof( Static ), 0x1026  ), // ChiselsNorth
-				new FillableEntry( 1, typeof( Static ), 0x1027  ), // ChiselsWest
+				//new FillableEntry( 1, typeof( Static ), 0x1026  ), // ChiselsNorth
+				//new FillableEntry( 1, typeof( Static ), 0x1027  ), // ChiselsWest
 				new FillableEntry( 2, typeof( DovetailSaw ) ),
 				new FillableEntry( 2, typeof( Hammer ) ),
 				new FillableEntry( 2, typeof( MouldingPlane ) ),
@@ -952,10 +957,11 @@ namespace Server.Items
 				new FillableEntry( 1, typeof( LightYarn ) ),
 				new FillableEntry( 1, typeof( LightYarnUnraveled ) ),
 				new FillableEntry( 1, typeof( SpoolOfThread ) ),
-				new FillableEntry( 1, typeof( FoldedCloth ), 0x1761 ), // FoldedCloth
-				new FillableEntry( 1, typeof( FoldedCloth ), 0x1762 ), // FoldedCloth
-				new FillableEntry( 1, typeof( FoldedCloth ), 0x1763 ), // FoldedCloth
-				new FillableEntry( 1, typeof( FoldedCloth ), 0x1764 ), // FoldedCloth
+                new FillableEntry( 1, typeof( FoldedCloth ) ),
+				//new FillableEntry( 1, typeof( FoldedCloth ), 0x1761 ), // FoldedCloth
+				//new FillableEntry( 1, typeof( FoldedCloth ), 0x1762 ), // FoldedCloth
+				//new FillableEntry( 1, typeof( FoldedCloth ), 0x1763 ), // FoldedCloth
+				//new FillableEntry( 1, typeof( FoldedCloth ), 0x1764 ), // FoldedCloth
 				new FillableEntry( 1, typeof( Dyes ) ),
 				new FillableEntry( 2, typeof( Leather ) )
 			} );
@@ -984,8 +990,10 @@ namespace Server.Items
 			new FillableEntry[]
 			{
 				new FillableEntry( 1, typeof( FishingPole ) ),
-				new FillableEntry( 1, typeof( SmallFish ), 0x0DD6 ), // SmallFish
-                new FillableEntry( 1, typeof( SmallFish ), 0x0DD7 ), // SmallFish
+                new FillableEntry( 1, typeof( SmallFish ) ),
+                new FillableEntry( 1, typeof( BigFish ) ),
+				//new FillableEntry( 1, typeof( SmallFish ), 0x0DD6 ), // SmallFish
+                //new FillableEntry( 1, typeof( SmallFish ), 0x0DD7 ), // SmallFish
 				new FillableEntry( 4, typeof( Fish ) )
 			} );
 
@@ -1070,10 +1078,10 @@ namespace Server.Items
 				new FillableEntry( 10, typeof( Garlic ) ),
 				new FillableEntry( 10, typeof( Ginseng ) ),
 				new FillableEntry( 10, typeof( MandrakeRoot ) ),
-				new FillableEntry(  1, typeof( Static ), 0xC3C ), // WhiteDriedFlowers
-				new FillableEntry(  1, typeof( Static ), 0xC3E ), // GreenDriedFlowers
-				new FillableEntry(  1, typeof( Static ), 0xC40 ), // DriedOnions
-				new FillableEntry(  1, typeof( Static ), 0xC42 )  // DriedHerbs
+				//new FillableEntry(  1, typeof( Static ), 0xC3C ), // WhiteDriedFlowers
+				//new FillableEntry(  1, typeof( Static ), 0xC3E ), // GreenDriedFlowers
+				//new FillableEntry(  1, typeof( Static ), 0xC40 ), // DriedOnions
+				//new FillableEntry(  1, typeof( Static ), 0xC42 )  // DriedHerbs
 			} );
 
 		public static FillableContent Inn = new FillableContent(
@@ -1220,10 +1228,13 @@ namespace Server.Items
 				new FillableEntry( 2, typeof( Pickaxe ) ),
 				new FillableEntry( 2, typeof( Shovel ) ),
 				new FillableEntry( 2, typeof( IronIngot ) ),
-                new FillableEntry( 2, typeof( IronOre ), 0x19B7 ), // Small Iron Ore
-				new FillableEntry( 7, typeof( IronOre ), 0x19B8 ), // Small Iron Ore
-                new FillableEntry( 7, typeof( IronOre ), 0x19BA ), // Small Iron Ore
-				new FillableEntry( 1, typeof( Static ), 0xFB8 )  // ForgedMetal
+    //            new FillableEntry( 2, typeof( IronOre ), 0x19B7 ), // Small Iron Ore
+				//new FillableEntry( 7, typeof( IronOre ), 0x19B8 ), // Small Iron Ore
+    //            new FillableEntry( 7, typeof( IronOre ), 0x19BA ), // Small Iron Ore
+                new FillableEntry( 7, typeof( IronOre ) ), // Small Iron Ore
+                new FillableEntry( 7, typeof( IronOre ) ), // Small Iron Ore
+                new FillableEntry( 7, typeof( IronOre ) ), // Small Iron Ore
+				//new FillableEntry( 1, typeof( Static ), 0xFB8 )  // ForgedMetal
 			} );
 
 		public static FillableContent Observatory = new FillableContent(
@@ -1245,8 +1256,8 @@ namespace Server.Items
 			},
 			new FillableEntry[]
 			{
-				new FillableEntry( 1, typeof( Static ), 0xFC1 ), // PaintsAndBrush
-				new FillableEntry( 2, typeof( Static ), 0xFBF ) // PenAndInk
+				//new FillableEntry( 1, typeof( Static ), 0xFC1 ), // PaintsAndBrush
+				//new FillableEntry( 2, typeof( Static ), 0xFBF ) // PenAndInk
 			} );
 
 		public static FillableContent Provisioner = new FillableContent(
@@ -1262,13 +1273,13 @@ namespace Server.Items
 				new FillableEntry( 1, typeof( CheeseSlice ) ),
 				new FillableEntry( 1, typeof( Eggs ) ),
 				new FillableEntry( 4, typeof( Fish ) ),
-				new FillableEntry( 1, typeof( Static ), 0x9DE ), // DirtyFrypan
-				new FillableEntry( 1, typeof( Static ), 0x9E8 ), // DirtyPan
-				new FillableEntry( 1, typeof( Static ), 0x9DC ), // DirtyKettle
-				new FillableEntry( 1, typeof( Static ), 0x9E7 ), // DirtySmallRoundPot
-				new FillableEntry( 1, typeof( Static ), 0x9DF ), // DirtyRoundPot
-				new FillableEntry( 1, typeof( Static ), 0x9DD ), // DirtySmallPot
-				new FillableEntry( 1, typeof( Static ), 0x9E6 ), // DirtyPot
+				//new FillableEntry( 1, typeof( Static ), 0x9DE ), // DirtyFrypan
+				//new FillableEntry( 1, typeof( Static ), 0x9E8 ), // DirtyPan
+				//new FillableEntry( 1, typeof( Static ), 0x9DC ), // DirtyKettle
+				//new FillableEntry( 1, typeof( Static ), 0x9E7 ), // DirtySmallRoundPot
+				//new FillableEntry( 1, typeof( Static ), 0x9DF ), // DirtyRoundPot
+				//new FillableEntry( 1, typeof( Static ), 0x9DD ), // DirtySmallPot
+				//new FillableEntry( 1, typeof( Static ), 0x9E6 ), // DirtyPot
 				new FillableEntry( 1, typeof( Apple ) ),
 				new FillableEntry( 2, typeof( Banana ) ),
 				new FillableEntry( 2, typeof( Bananas ) ),
@@ -1344,7 +1355,8 @@ namespace Server.Items
 				new FillableEntry( 2, typeof( ThighBoots ) ),
 
 				new FillableEntry( 2, typeof( GnarledStaff ) ),
-				new FillableEntry( 1, typeof( Static ), 0x166E ), // Whip
+				//new FillableEntry( 1, typeof( Static ), 0x166E ), // Whip
+                new FillableEntry( 1, typeof( Whip ) ), // Whip
 
 				new FillableEntry( 2, typeof( Bow ) ),
 				new FillableEntry( 2, typeof( Crossbow ) ),
@@ -1439,9 +1451,9 @@ namespace Server.Items
 				new FillableEntry( 2, typeof( Springs ) ),
 				new FillableEntry( 5, typeof( TinkerTools ) ),
 				new FillableEntry( 4, typeof( Key ) ),
-				new FillableEntry( 1, typeof( Static ), Utility.Random(2) + 0x1024 ), // DecoArrowShafts
-                new FillableEntry( 1, typeof( Static ), Utility.Random(2) + 0x14FD ), // Lockpicks
-                new FillableEntry( 1, typeof( Static ), Utility.Random(2) + 0x1EBA )  // ToolKit
+				//new FillableEntry( 1, typeof( Static ), Utility.Random(2) + 0x1024 ), // DecoArrowShafts
+    //            new FillableEntry( 1, typeof( Static ), Utility.Random(2) + 0x14FD ), // Lockpicks
+    //            new FillableEntry( 1, typeof( Static ), Utility.Random(2) + 0x1EBA )  // ToolKit
 			} );
 
 		public static FillableContent Veterinarian = new FillableContent(

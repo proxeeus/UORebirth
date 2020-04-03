@@ -264,6 +264,7 @@
     <Compile Include="Engines\AI\AI\MeeleeAI.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Engines\AI\AI\OppositionGroup.cs" />
     <Compile Include="Engines\AI\AI\PredatorAI.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -696,6 +697,7 @@
     <Compile Include="Items\Addons\GrayBrickFireplaceSouthAddon.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Addons\KhaldunPitTeleporter.cs" />
     <Compile Include="Items\Addons\LargeBedEastAddon.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -732,6 +734,7 @@
     <Compile Include="Items\Addons\PickpocketDips.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Addons\RejuvinationAnkhs.cs" />
     <Compile Include="Items\Addons\SandstoneFireplaceEastAddon.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -792,6 +795,7 @@
     <Compile Include="Items\Addons\WaterTroughSouthAddon.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Addons\WaterVat.cs" />
     <Compile Include="Items\Armor\ArmorEnums.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -1029,9 +1033,11 @@
     <Compile Include="Items\Books\BlueBook.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Books\BookContent.cs" />
     <Compile Include="Items\Books\BrownBook.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Books\LibraryBooks.cs" />
     <Compile Include="Items\Books\RedBook.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -1065,6 +1071,7 @@
     <Compile Include="Items\Clothing\Shoes.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Clothing\TribalMask.cs" />
     <Compile Include="Items\Clothing\Waist.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -1176,6 +1183,7 @@
     <Compile Include="Items\Containers\Container.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Containers\FillableContainers.cs" />
     <Compile Include="Items\Containers\FurnitureContainer.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -1227,21 +1235,32 @@
     <Compile Include="Items\Food\BeverageEmpty.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Food\CheeseSlice.cs" />
     <Compile Include="Items\Food\CookableFood.cs">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Items\Food\Cooking.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Food\EarOfCorn.cs" />
     <Compile Include="Items\Food\Food.cs">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Items\Food\Fruits.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Food\Lemons.cs" />
+    <Compile Include="Items\Food\Limes.cs" />
+    <Compile Include="Items\Food\OpenCoconut.cs" />
+    <Compile Include="Items\Food\SheafOfHay.cs" />
+    <Compile Include="Items\Food\SlabOfBacon.cs" />
+    <Compile Include="Items\Food\SmallPumpkin.cs" />
+    <Compile Include="Items\Food\SmallWatermelon.cs" />
+    <Compile Include="Items\Food\Turnip.cs" />
     <Compile Include="Items\Food\Vegetables.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Food\Wheat.cs" />
     <Compile Include="Items\Games\Backgammon.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -1545,6 +1564,7 @@
     <Compile Include="Items\Misc\Scales.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Misc\SerpentPillar.cs" />
     <Compile Include="Items\Misc\Static.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -1566,6 +1586,7 @@
     <Compile Include="Items\Misc\TribalPaint.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Misc\WarningItem.cs" />
     <Compile Include="Items\Misc\Waypoint.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -1611,6 +1632,7 @@
     <Compile Include="Items\Resources\Fishing\MagicFish.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Resources\Fishing\SmallFish.cs" />
     <Compile Include="Items\Resources\Masonry\Granite.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -1680,6 +1702,7 @@
     <Compile Include="Items\Resources\Tailor\Flax.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Resources\Tailor\FoldedCloth.cs" />
     <Compile Include="Items\Resources\Tailor\Hides.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -2322,6 +2345,7 @@
     <Compile Include="Items\Skill Items\Tools\Skillet.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Skill Items\Tools\SledgeHammer.cs" />
     <Compile Include="Items\Skill Items\Tools\SmithHammer.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -3684,6 +3708,18 @@
     <Compile Include="Mobiles\PlayerMobile.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianArchmage.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianKnight.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianMage.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianMatriarch.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianWarrior.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Terathans\TerathanAvenger.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Terathans\TerathanDrone.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Terathans\TerathanMatriarch.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Terathans\TerathanWarrior.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Undead\Mummy.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Undead\RottingCorpse.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Undead\Wraith.cs" />
     <Compile Include="Multis\BaseHouse.cs">
       <SubType>Code</SubType>
     </Compile>
