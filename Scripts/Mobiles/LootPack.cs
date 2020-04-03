@@ -405,7 +405,18 @@ namespace Server
 
 		public static LootPackEntry BalronSword = new LootPackEntry( new LootPackItem[1]{ new LootPackItem( typeof( Broadsword ) ) }, 100.0, 1, 50, 100 );
 
-		public static readonly LootPack LowScrolls = new LootPack( new LootPackEntry[]
+        public static readonly LootPackItem[] PotionItems = new LootPackItem[]
+        {
+                new LootPackItem( typeof( AgilityPotion ), 1 ),
+                new LootPackItem( typeof( StrengthPotion ), 1 ),
+                new LootPackItem( typeof( RefreshPotion ), 1 ),
+                new LootPackItem( typeof( LesserCurePotion ), 1 ),
+                new LootPackItem( typeof( LesserHealPotion ), 1 ),
+                new LootPackItem( typeof( LesserPoisonPotion ), 1 )
+        };
+
+
+        public static readonly LootPack LowScrolls = new LootPack( new LootPackEntry[]
 			{
 				new LootPackEntry( LowScrollItems,	100.00, 1 )
 			} );
@@ -429,7 +440,12 @@ namespace Server
 			{
 				new LootPackEntry( FoodItems,			100.00, new RandMinMax( 1, 3 ) )
 			} );
-	}
+
+        public static readonly LootPack Potions = new LootPack(new LootPackEntry[]
+            {
+                new LootPackEntry( PotionItems,      100.00, new RandMinMax( 1, 3) )
+            });
+    }
 
 	public class LootPackEntry
 	{

@@ -226,9 +226,13 @@ namespace Server.Mobiles
 
 		public virtual InhumanSpeech SpeechType{ get{ return null; } }
 
+        public virtual OppositionGroup OppositionGroup
+        {
+            get { return null; }
+        }
 
-		#region Bonding
-		public const bool BondingEnabled = false;
+        #region Bonding
+        public const bool BondingEnabled = false;
 
 		public virtual bool IsBondable{ get{ return ( BondingEnabled && !Summoned ); } }
 		public virtual TimeSpan BondingDelay{ get{ return TimeSpan.FromDays( 7.0 ); } }
@@ -333,7 +337,36 @@ namespace Server.Mobiles
 				base.OnPoisonImmunity( from, poison );
 		}
 
-		public virtual bool BardImmune{ get{ return MinTameSkill >= 999; } }
+        public virtual void GenerateLoot()
+        {
+        }
+
+        public virtual void AddLoot(LootPack pack, int amount)
+        {
+            for (int i = 0; i < amount; ++i)
+                AddLoot(pack);
+        }
+
+        public virtual void AddLoot(LootPack pack)
+        {
+            if (Summoned)
+                return;
+
+            Container backpack = Backpack;
+
+            if (backpack == null)
+            {
+                backpack = new Backpack();
+
+                backpack.Movable = false;
+
+                AddItem(backpack);
+            }
+
+            pack.Generate(this, backpack);
+        }
+
+        public virtual bool BardImmune{ get{ return MinTameSkill >= 999; } }
 		public virtual bool Unprovokable{ get{ return BardImmune; } }
 		public virtual bool Uncalmable{ get{ return BardImmune; } }
 
@@ -468,7 +501,12 @@ namespace Server.Mobiles
 
 		public virtual bool IsFriend( Mobile m )
 		{
-			if ( !(m is BaseCreature) )
+            OppositionGroup g = this.OppositionGroup;
+
+            if (g != null && g.IsEnemy(this, m))
+                return false;
+
+            if ( !(m is BaseCreature) )
 				return false;
 
 			BaseCreature c = (BaseCreature)m;
@@ -478,7 +516,12 @@ namespace Server.Mobiles
 
 		public virtual bool IsEnemy( Mobile m )
 		{
-			if ( m is BaseGuard )
+            OppositionGroup g = this.OppositionGroup;
+
+            if (g != null && g.IsEnemy(this, m))
+                return true;
+
+            if ( m is BaseGuard )
 				return false;
 
 			if ( !(m is BaseCreature) )
