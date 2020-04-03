@@ -964,12 +964,12 @@ namespace Server
 			public int CreateTeleporters()
 			{
 				CreateTeleportersMap( Map.Felucca );
-				CreateTeleportersMap( Map.Trammel );
-				CreateTeleportersTrammel( Map.Trammel );
+				//CreateTeleportersMap( Map.Trammel );
+				//CreateTeleportersTrammel( Map.Trammel );
 				CreateTeleportersFelucca( Map.Felucca );
-				CreateTeleportersMap2( Map.Ilshenar );
-				CreateTeleportersMap3( Map.Malas );
-				CreateTeleportersMap4( Map.Tokuno );
+				//CreateTeleportersMap2( Map.Ilshenar );
+				//CreateTeleportersMap3( Map.Malas );
+				//CreateTeleportersMap4( Map.Tokuno );
 				return m_Count;
 			}
 		}

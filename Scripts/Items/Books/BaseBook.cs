@@ -27,7 +27,12 @@ namespace Server.Items
 			m_Lines = new string[0];
 		}
 
-		public BookPageInfo( GenericReader reader )
+        public BookPageInfo(params string[] lines)
+        {
+            m_Lines = lines;
+        }
+
+        public BookPageInfo( GenericReader reader )
 		{
 			int length = reader.ReadInt();
 
@@ -105,17 +110,49 @@ namespace Server.Items
 			m_Pages = new BookPageInfo[pageCount];
 			m_Writable = writable;
 
-			for ( int i = 0; i < m_Pages.Length; ++i )
-				m_Pages[i] = new BookPageInfo();
+            BookContent content = this.DefaultContent;
 
-			Weight = BookWeight;
+            if (content == null)
+            {
+                m_Pages = new BookPageInfo[pageCount];
+
+                for (int i = 0; i < m_Pages.Length; ++i)
+                    m_Pages[i] = new BookPageInfo();
+            }
+            else
+            {
+                m_Pages = content.Copy();
+            }
+
+            Weight = BookWeight;
 		}
-	
-		public BaseBook( Serial serial ) : base( serial )
+
+        // Intended for defined books only
+        public BaseBook(int itemID, bool writable) : base(itemID)
+        {
+            m_Writable = writable;
+
+            BookContent content = this.DefaultContent;
+
+            if (content == null)
+            {
+                m_Pages = new BookPageInfo[0];
+            }
+            else
+            {
+                m_Title = content.Title;
+                m_Author = content.Author;
+                m_Pages = content.Copy();
+            }
+        }
+
+        public BaseBook( Serial serial ) : base( serial )
 		{
 		}
 
-		public override void Serialize( GenericWriter writer )
+        public virtual BookContent DefaultContent { get { return null; } }
+
+        public override void Serialize( GenericWriter writer )
 		{
 			base.Serialize( writer );
 

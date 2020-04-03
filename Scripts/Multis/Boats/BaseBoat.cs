@@ -80,7 +80,83 @@ namespace Server.Multis
 
 		public virtual BaseDockedBoat DockedBoat{ get{ return null; } }
 
-		public BaseBoat() : base( 0x4000 )
+
+        public static BaseBoat FindBoatAt(IPoint2D loc, Map map)
+        {
+            Sector sector = map.GetSector(loc);
+
+            for (int i = 0; i < sector.Multis.Count; i++)
+            {
+                BaseBoat boat = sector.Multis[i] as BaseBoat;
+
+                if (boat != null && boat.Contains(loc.X, loc.Y))
+                    return boat;
+            }
+
+            return null;
+        }
+
+        public List<IEntity> GetMovingEntities()
+        {
+            List<IEntity> list = new List<IEntity>();
+
+            Map map = Map;
+
+            if (map == null || map == Map.Internal)
+                return list;
+
+            MultiComponentList mcl = Components;
+
+            foreach (object o in map.GetObjectsInBounds(new Rectangle2D(X + mcl.Min.X, Y + mcl.Min.Y, mcl.Width, mcl.Height)))
+            {
+                if (o == this || o is TillerMan || o is Hold || o is Plank)
+                    continue;
+
+                if (o is Item)
+                {
+                    Item item = (Item)o;
+
+                    if (Contains(item) && item.Visible && item.Z >= Z)
+                        list.Add(item);
+                }
+                else if (o is Mobile)
+                {
+                    Mobile m = (Mobile)o;
+
+                    if (Contains(m))
+                        list.Add(m);
+                }
+            }
+
+            return list;
+        }
+
+        public void Teleport(int xOffset, int yOffset, int zOffset)
+        {
+            List<IEntity> toMove = GetMovingEntities();
+
+            for (int i = 0; i < toMove.Count; ++i)
+            {
+                IEntity e = toMove[i];
+
+                if (e is Item)
+                {
+                    Item item = (Item)e;
+
+                    item.Location = new Point3D(item.X + xOffset, item.Y + yOffset, item.Z + zOffset);
+                }
+                else if (e is Mobile)
+                {
+                    Mobile m = (Mobile)e;
+
+                    m.Location = new Point3D(m.X + xOffset, m.Y + yOffset, m.Z + zOffset);
+                }
+            }
+
+            Location = new Point3D(X + xOffset, Y + yOffset, Z + zOffset);
+        }
+
+        public BaseBoat() : base( 0x4000 )
 		{
 			m_DecayTime = DateTime.Now + BoatDecayDelay;
 

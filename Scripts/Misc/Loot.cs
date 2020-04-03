@@ -147,11 +147,27 @@ namespace Server
 				typeof( SummonDaemonScroll ),	typeof( SummonEarthElementalScroll ),	typeof( SummonFireElementalScroll ),	typeof( SummonWaterElementalScroll )
 			};
 
+        private static Type[] m_LibraryBookTypes = new Type[]
+            {
+                        typeof( GrammarOfOrcish ),      typeof( CallToAnarchy ),                typeof( ArmsAndWeaponsPrimer ),
+                        typeof( SongOfSamlethe ),       typeof( TaleOfThreeTribes ),            typeof( GuideToGuilds ),
+                        typeof( BirdsOfBritannia ),     typeof( BritannianFlora ),              typeof( ChildrenTalesVol2 ),
+                        typeof( TalesOfVesperVol1 ),    typeof( DeceitDungeonOfHorror ),        typeof( DimensionalTravel ),
+                        typeof( EthicalHedonism ),      typeof( MyStory ),                      typeof( DiversityOfOurLand ),
+                        typeof( QuestOfVirtues ),       typeof( RegardingLlamas ),              typeof( TalkingToWisps ),
+                        typeof( TamingDragons ),        typeof( BoldStranger ),                 typeof( BurningOfTrinsic ),
+                        typeof( TheFight ),             typeof( LifeOfATravellingMinstrel ),    typeof( MajorTradeAssociation ),
+                        typeof( RankingsOfTrades ),     typeof( WildGirlOfTheForest ),          typeof( TreatiseOnAlchemy ),
+                        typeof( VirtueBook )
+            };
 
-		public static Type[] RegularScrollTypes{ get{ return m_RegularScrollTypes; } }
-		#endregion
+        public static Type[] LibraryBookTypes { get { return m_LibraryBookTypes; } }
 
-		public static BaseWeapon RandomWeapon()
+        public static Type[] RegularScrollTypes{ get{ return m_RegularScrollTypes; } }
+
+        #endregion
+
+        public static BaseWeapon RandomWeapon()
 		{
 			if ( Core.AOS )
 				return Construct( m_WeaponTypes ) as BaseWeapon;
@@ -194,8 +210,13 @@ namespace Server
 			return Construct( m_RegularScrollTypes, Utility.RandomMinMax( minIndex, maxIndex ) ) as SpellScroll;
 		}
 
-		#region Construction methods
-		public static Item Construct( Type type )
+        public static BaseBook RandomLibraryBook()
+        {
+            return Construct(m_LibraryBookTypes) as BaseBook;
+        }
+
+        #region Construction methods
+        public static Item Construct( Type type )
 		{
 			try
 			{

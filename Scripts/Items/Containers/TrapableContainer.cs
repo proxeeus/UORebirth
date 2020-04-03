@@ -20,8 +20,22 @@ namespace Server.Items
 		private int m_TrapPower;
 		private Mobile m_Trapper;
 		private bool m_Trapped;
+        private int m_TrapLevel;
 
-		[CommandProperty( AccessLevel.GameMaster )]
+        [CommandProperty(AccessLevel.GameMaster)]
+        public int TrapLevel
+        {
+            get
+            {
+                return m_TrapLevel;
+            }
+            set
+            {
+                m_TrapLevel = value;
+            }
+        }
+
+        [CommandProperty( AccessLevel.GameMaster )]
 		public TrapType TrapType
 		{
 			get
