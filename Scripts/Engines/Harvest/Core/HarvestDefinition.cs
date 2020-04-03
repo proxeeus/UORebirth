@@ -55,7 +55,15 @@ namespace Server.Engines.Harvest
 
 		public Hashtable Banks{ get{ return m_BanksByMap; } set{ m_BanksByMap = value; } }
 
-		public void SendAsciiMessageTo( Mobile from, object message )
+        public void SendMessageTo(Mobile from, object message)
+        {
+            if (message is int)
+                from.SendLocalizedMessage((int)message);
+            else if (message is string)
+                from.SendMessage((string)message);
+        }
+
+        public void SendAsciiMessageTo( Mobile from, object message )
 		{
 			if ( message is int )
 				from.SendLocalizedMessage( (int)message );

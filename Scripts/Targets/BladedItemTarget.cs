@@ -48,8 +48,8 @@ namespace Server.Targets
 					if ( bank == null )
 						return;
 
-					if ( bank.GetCurrentFor( from ) < 5 )
-					{
+                    if (bank.Current < 5)
+                    {
 						from.SendLocalizedMessage( 500493 ); // There's not enough wood here to harvest.
 					}
 					else

@@ -43,8 +43,8 @@ namespace Server.Engines.Harvest
 			oreAndStone.MinTotal = 5;
 			oreAndStone.MaxTotal = 15;
 
-			oreAndStone.MinRespawn = TimeSpan.FromMinutes( 15.0 );
-			oreAndStone.MaxRespawn = TimeSpan.FromMinutes( 30.0 );
+			oreAndStone.MinRespawn = TimeSpan.FromMinutes( 10.0 );
+			oreAndStone.MaxRespawn = TimeSpan.FromMinutes( 20.0 );
 
 			// Skill checking is done on the Mining skill
 			oreAndStone.Skill = SkillName.Mining;

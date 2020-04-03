@@ -11,46 +11,26 @@ namespace Server.Engines.Harvest
 		private DateTime m_NextRespawn;
 		private HarvestVein m_Vein, m_DefaultVein;
 
-		public int GetCurrentFor( Mobile m )
-		{
-            /*
-			HarvestBank fishing = Fishing.System.Definition.GetBank( m.Map, m.X, m.Y );
-			CheckRespawn();
 
-			int current = m_Current;
-
-			if ( this == fishing )
-				return current;
-
-			if ( m.AccessLevel == AccessLevel.Administrator )
-				m.SendMessage( "Current: {0}", current );
-
-			ArrayList list = m.Map.GetSector( m ).Regions;
-			for(int i=0;i<list.Count;i++)
-			{
-				Region r = list[i] as Region;
-				if ( r is HouseRegion )
-				{
-					current -= m_Maximum / 2;
-					if ( current < 0 )
-						current = 0;
-					break;
-				}
-				else if ( ( r is GuardedRegion && !((GuardedRegion)r).IsDisabled() ) || r is DuelArenaRegion )
-				{
-					current = 0;
-					break;
-				}
-			}
-
-			if ( m.AccessLevel == AccessLevel.Administrator )
-				m.SendMessage( "After check: {0}", current );
+        public string GetDebugData
+        {
+            get
+            {
+                return this.m_Current.ToString() + " -- NEXT ONE A " + this.m_NextRespawn.ToString();
+            }
             
-			return current;*/
-            return m_Current;
-		}
+        }
 
-		public HarvestVein Vein
+        public int Current
+        {
+            get
+            {
+                CheckRespawn();
+                return m_Current;
+            }
+        }
+
+        public HarvestVein Vein
 		{
 			get
 			{
@@ -75,7 +55,11 @@ namespace Server.Engines.Harvest
 		public void CheckRespawn()
 		{
 			if ( m_Current == m_Maximum || m_NextRespawn > DateTime.Now )
-				return;
+            {
+                //Console.WriteLine("CheckRespawn: m_Current == " + m_Current.ToString() + "; Next Respawn == " + m_NextRespawn.ToString());
+                return;
+            }
+				
 
 			m_Current = m_Maximum;
 			m_Vein = m_DefaultVein;

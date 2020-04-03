@@ -49,15 +49,14 @@ namespace Server.Engines.Harvest
 
 		public virtual bool CheckResources( Mobile from, Item tool, HarvestDefinition def, Map map, Point3D loc, bool timed )
 		{
-			HarvestBank bank = def.GetBank( map, loc.X, loc.Y );
+            HarvestBank bank = def.GetBank(map, loc.X, loc.Y);
+            bool available = bank != null && bank.Current >= def.ConsumedPerHarvest;
 
-			bool available = ( bank != null && bank.GetCurrentFor( from ) >= def.ConsumedPerHarvest );
+            if (!available)
+                def.SendMessageTo(from, timed ? def.DoubleHarvestMessage : def.NoResourcesMessage);
 
-			if ( !available )
-				def.SendAsciiMessageTo( from, timed ? def.DoubleHarvestMessage : def.NoResourcesMessage );
-
-			return available;
-		}
+            return available;
+        }
 
 		public virtual void OnBadHarvestTarget( Mobile from, Item tool, object toHarvest )
 		{
@@ -163,7 +162,7 @@ namespace Server.Engines.Harvest
 					{
 						if ( item.Stackable )
 						{
-							if ( map == Map.Felucca && bank.GetCurrentFor( from ) >= def.ConsumedPerFeluccaHarvest )
+							if ( map == Map.Felucca && bank.Current >= def.ConsumedPerFeluccaHarvest )
 								item.Amount = def.ConsumedPerFeluccaHarvest;
 							else
 								item.Amount = def.ConsumedPerHarvest;
