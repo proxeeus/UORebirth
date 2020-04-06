@@ -1202,6 +1202,10 @@
     <Compile Include="Items\Containers\TreasureChest.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Containers\TreasureChests\TreasureChestLevel1.cs" />
+    <Compile Include="Items\Containers\TreasureChests\TreasureChestLevel2.cs" />
+    <Compile Include="Items\Containers\TreasureChests\TreasureChestLevel3.cs" />
+    <Compile Include="Items\Containers\TreasureChests\TreasureChestLevel4.cs" />
     <Compile Include="Items\Deeds\BarkeepContract.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -3708,6 +3712,8 @@
     <Compile Include="Mobiles\PlayerMobile.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Mobiles\T2A\Animals\Felines\HellCat.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Elementals\Efreet.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianArchmage.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianKnight.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianMage.cs" />
@@ -3720,6 +3726,9 @@
     <Compile Include="Mobiles\T2A\Monsters\Undead\Mummy.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Undead\RottingCorpse.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Undead\Wraith.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Vermin\LavaLizard.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Vermin\LavaSerpent.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Vermin\LavaSnake.cs" />
     <Compile Include="Multis\BaseHouse.cs">
       <SubType>Code</SubType>
     </Compile>

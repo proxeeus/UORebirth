@@ -161,6 +161,40 @@ namespace Server
                         typeof( VirtueBook )
             };
 
+        private static Type[] m_ClothingTypes = new Type[]
+    {
+                typeof( Cloak ),
+                typeof( Bonnet ),               typeof( Cap ),                  typeof( FeatheredHat ),
+                typeof( FloppyHat ),            typeof( JesterHat ),            typeof( Surcoat ),
+                typeof( SkullCap ),             typeof( StrawHat ),             typeof( TallStrawHat ),
+                typeof( TricorneHat ),          typeof( WideBrimHat ),          typeof( WizardsHat ),
+                typeof( BodySash ),             typeof( Doublet ),              typeof( Boots ),
+                typeof( FullApron ),            typeof( JesterSuit ),           typeof( Sandals ),
+                typeof( Tunic ),                typeof( Shoes ),                typeof( Shirt ),
+                typeof( Kilt ),                 typeof( Skirt ),                typeof( FancyShirt ),
+                typeof( FancyDress ),           typeof( ThighBoots ),           typeof( LongPants ),
+                typeof( PlainDress ),           typeof( Robe ),                 typeof( ShortPants ),
+                typeof( HalfApron )
+    };
+        private static Type[] m_HatTypes = new Type[]
+    {
+                typeof( SkullCap ),         typeof( Bandana ),      typeof( FloppyHat ),
+                typeof( Cap ),              typeof( WideBrimHat ),  typeof( StrawHat ),
+                typeof( TallStrawHat ),     typeof( WizardsHat ),   typeof( Bonnet ),
+                typeof( FeatheredHat ),     typeof( TricorneHat ),  typeof( JesterHat ),
+                typeof( BearMask ),         typeof( DeerMask )
+    };
+        private static Type[] m_RangedWeaponTypes = new Type[]
+    {
+                typeof( Bow ),                  typeof( Crossbow ),             typeof( HeavyCrossbow )
+    };
+
+        public static Type[] RangedWeaponTypes { get { return m_RangedWeaponTypes; } }
+
+        public static Type[] HatTypes { get { return m_HatTypes; } }
+
+        public static Type[] ClothingTypes { get { return m_ClothingTypes; } }
+
         public static Type[] LibraryBookTypes { get { return m_LibraryBookTypes; } }
 
         public static Type[] RegularScrollTypes{ get{ return m_RegularScrollTypes; } }
@@ -215,6 +249,52 @@ namespace Server
             return Construct(m_LibraryBookTypes) as BaseBook;
         }
 
+        public static SpellScroll RandomScroll(int minIndex, int maxIndex, SpellbookType type)
+        {
+            Type[] types = m_RegularScrollTypes;
+
+            return Construct(types, Utility.RandomMinMax(minIndex, maxIndex)) as SpellScroll;
+        }
+        public static MagicWand RandomWand()
+        {
+            return new MagicWand();
+        }
+
+        public static BaseClothing RandomClothing()
+        {
+            return RandomClothing(false, false);
+        }
+
+        public static BaseClothing RandomClothing(bool inTokuno, bool isMondain)
+        {
+            return Construct(m_ClothingTypes) as BaseClothing;
+        }
+
+        public static BaseClothing RandomJewelry()
+        {
+            return Construct(m_JewelryTypes) as BaseClothing;
+        }
+
+        public static Item RandomArmorOrShieldOrWeapon()
+        {
+            return RandomArmorOrShieldOrWeapon(false, false);
+        }
+
+        public static Item RandomArmorOrShieldOrWeapon(bool inTokuno, bool isMondain)
+        {
+            return Construct(m_WeaponTypes, m_RangedWeaponTypes, m_ArmorTypes, m_HatTypes, m_ShieldTypes);
+        }
+
+        public static BaseArmor RandomArmorOrShield()
+        {
+            return RandomArmorOrShield(false, false);
+        }
+
+        public static BaseArmor RandomArmorOrShield(bool inTokuno, bool isMondain)
+        {
+            return Construct(m_ArmorTypes, m_ShieldTypes) as BaseArmor;
+        }
+
         #region Construction methods
         public static Item Construct( Type type )
 		{
@@ -241,7 +321,31 @@ namespace Server
 				return Construct( types[index] );
 			return null;
 		}
-		#endregion
-	}
+
+
+        public static Item Construct(params Type[][] types)
+        {
+            int totalLength = 0;
+
+            for (int i = 0; i < types.Length; ++i)
+                totalLength += types[i].Length;
+
+            if (totalLength > 0)
+            {
+                int index = Utility.Random(totalLength);
+
+                for (int i = 0; i < types.Length; ++i)
+                {
+                    if (index >= 0 && index < types[i].Length)
+                        return Construct(types[i][index]);
+
+                    index -= types[i].Length;
+                }
+            }
+
+            return null;
+        }
+        #endregion
+    }
 }
 
