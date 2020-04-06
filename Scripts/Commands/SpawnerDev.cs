@@ -143,6 +143,9 @@ namespace Server.Scripts.Commands
 				case 1://Felucca
 					MakeSpawner( types, x, y, Map.Felucca, npcCount, homeRange, bringToHome, minTime, maxTime, team , uniqueSpawn );
 					break;
+				case 2://Felucca too
+					MakeSpawner( types, x, y, Map.Felucca, npcCount, homeRange, bringToHome, minTime, maxTime, team , uniqueSpawn );
+					break;
 				default:
 					Console.WriteLine( "UOAM Vendor Parser: Warning, unknown map {0}", map );
 					break;
