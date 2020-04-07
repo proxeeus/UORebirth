@@ -189,6 +189,7 @@
     <Compile Include="Commands\ConvertPlayers.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Commands\Decorate.cs" />
     <Compile Include="Commands\Dupe.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -222,6 +223,7 @@
     <Compile Include="Commands\SkillsMenu.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Commands\Spawn.cs" />
     <Compile Include="Commands\VisibilityList.cs">
       <SubType>Code</SubType>
     </Compile>
