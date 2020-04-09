@@ -40,7 +40,7 @@ namespace Server.Scripts.Commands
                     try
                     {
                         var baseDir = Core.BaseDirectory;
-                        var export_fileName = Path.Combine(baseDir, "tamere.map");
+                        var export_fileName = Path.Combine(baseDir, string.Format("Data/spawn_export_{0}.map", DateTime.Now.Millisecond));
                         Console.WriteLine(export_fileName);
 
                         e.Mobile.SendMessage("Now exporting worldspawns to: " + export_fileName);
@@ -96,8 +96,8 @@ namespace Server.Scripts.Commands
                                     // +name [MobileTypeA, MobileTypeB, etc]: X Y MapID NPCCount HomeRange BringToHome MinTime MaxTime Team Description
                                     // "," can also be "|" depending on spawn being unique or not
                                     var line = string.Format(template, spawnEntryName, creaturesToSpawn, currentSpawn.X.ToString(), currentSpawn.Y.ToString(), currentSpawn.Map.MapID.ToString(),
-                                        currentSpawn.Count.ToString(), currentSpawn.HomeRange.ToString(), false, currentSpawn.MinDelay.ToString(),
-                                        currentSpawn.MaxDelay.ToString(), currentSpawn.Team.ToString(), string.Empty);
+                                        currentSpawn.Count.ToString(), currentSpawn.HomeRange.ToString(), false, Math.Round(currentSpawn.MinDelay.TotalMinutes).ToString(),
+                                        Math.Round(currentSpawn.MaxDelay.TotalMinutes).ToString(), currentSpawn.Team.ToString(), string.Empty);
 
                                     // BringToHome == false because: BringToHome is a Spawn object method telling the spawns to spawn right at the spawn point.
                                     // It's a Prop in the "Spawn" app only because we need to explicitely tell -or not- whether to bring the spawns home or not
