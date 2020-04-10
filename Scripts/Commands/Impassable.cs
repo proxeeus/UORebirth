@@ -21,26 +21,24 @@ namespace Server.Scripts.Commands
         {
             try
             {
+                IPooledEnumerable eable = null;
                 foreach (var witem in World.Items)
                 {
-                    if (witem.Value.ItemID == 8612)
+                    if (witem.Value.ItemID == 8612 || witem.Value.ItemID == 8601)
                     {
-                        var eable = witem.Value.Map.GetItemsInRange(new Point3D(witem.Value.X, witem.Value.Y, witem.Value.Z), 0);
+                        eable = witem.Value.Map.GetItemsInRange(new Point3D(witem.Value.X, witem.Value.Y, witem.Value.Z), 0);
 
                         foreach (Item item in eable)
                         {
-                            if (item is Item && item.ItemID == 8612 && item.Z == witem.Value.Z)
+                            if (item is Item && (item.ItemID == 8612 || witem.Value.ItemID == 8601) && item.Z == witem.Value.Z)
                                 m_ToDelete.Enqueue(item);
                         }
-
-                        eable.Free();
-
-                        while (m_ToDelete.Count > 0)
-                            ((Item)m_ToDelete.Dequeue()).Delete();
                     }
-                        //World.Items.Remove(item.Key);
-                        //item.Value.Delete();
                 }
+                eable.Free();
+
+                while (m_ToDelete.Count > 0)
+                    ((Item)m_ToDelete.Dequeue()).Delete();
 
             }
             catch (Exception ex)
