@@ -3737,6 +3737,7 @@
     <Compile Include="Mobiles\T2A\Monsters\Humanoids\Imp.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Humanoids\RatmanArcher.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Humanoids\RatmanMage.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Humanoids\StoneGargoyle.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Humanoids\Titan.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianArchmage.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianKnight.cs" />
