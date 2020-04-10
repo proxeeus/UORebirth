@@ -189,6 +189,15 @@ namespace Server
                 typeof( Bow ),                  typeof( Crossbow ),             typeof( HeavyCrossbow )
     };
 
+        private static Type[] m_StatueTypes = new Type[]
+{
+            typeof( StatueSouth ),          typeof( StatueSouth2 ),         typeof( StatueNorth ),
+            typeof( StatueWest ),           typeof( StatueEast ),           typeof( StatueEast2 ),
+            typeof( StatueSouthEast ),      typeof( BustSouth ),            typeof( BustEast )
+};
+
+        public static Type[] StatueTypes { get { return m_StatueTypes; } }
+
         public static Type[] RangedWeaponTypes { get { return m_RangedWeaponTypes; } }
 
         public static Type[] HatTypes { get { return m_HatTypes; } }
@@ -200,6 +209,11 @@ namespace Server
         public static Type[] RegularScrollTypes{ get{ return m_RegularScrollTypes; } }
 
         #endregion
+
+        public static Item RandomStatue()
+        {
+            return Construct(m_StatueTypes);
+        }
 
         public static BaseWeapon RandomWeapon()
 		{

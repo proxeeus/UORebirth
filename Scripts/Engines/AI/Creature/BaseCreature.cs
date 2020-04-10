@@ -985,7 +985,23 @@ namespace Server.Mobiles
 			}
 		}
 
-		public const int DefaultRangePerception = 16;
+        public void PackStatue(int min, int max)
+        {
+            PackStatue(Utility.RandomMinMax(min, max));
+        }
+
+        public void PackStatue(int amount)
+        {
+            for (int i = 0; i < amount; ++i)
+                PackStatue();
+        }
+
+        public void PackStatue()
+        {
+            PackItem(Loot.RandomStatue());
+        }
+
+        public const int DefaultRangePerception = 16;
 		public const int OldRangePerception = 10;
 
 		public BaseCreature(AIType ai,

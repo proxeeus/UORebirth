@@ -1011,6 +1011,7 @@
     <Compile Include="Items\BaseItem.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Body Parts\BonePile.cs" />
     <Compile Include="Items\Body Parts\Head.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -1020,6 +1021,7 @@
     <Compile Include="Items\Body Parts\LeftLeg.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Body Parts\RibCage.cs" />
     <Compile Include="Items\Body Parts\RightArm.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -2727,6 +2729,7 @@
     <Compile Include="Items\Weapons\Staves\BlackStaff.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Items\Weapons\Staves\GlacialStaff.cs" />
     <Compile Include="Items\Weapons\Staves\GnarledStaff.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -3715,12 +3718,34 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Mobiles\T2A\Animals\Felines\HellCat.cs" />
+    <Compile Include="Mobiles\T2A\Animals\Misc\BullFrog.cs" />
+    <Compile Include="Mobiles\T2A\Animals\Misc\GiantToad.cs" />
+    <Compile Include="Mobiles\T2A\Animals\Mounts\DesertOstard.cs" />
+    <Compile Include="Mobiles\T2A\Animals\Mounts\ForestOstard.cs" />
+    <Compile Include="Mobiles\T2A\Animals\Mounts\FrenziedOstard.cs" />
+    <Compile Include="Mobiles\T2A\Animals\Mounts\Nightmare.cs" />
+    <Compile Include="Mobiles\T2A\Animals\Mounts\RidableLlama.cs" />
+    <Compile Include="Mobiles\T2A\Animals\Reptiles\IceSerpent.cs" />
+    <Compile Include="Mobiles\T2A\Animals\Reptiles\IceSnake.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Arachnids\FrostSpider.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Elementals\Efreet.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Humanoids\Cyclops.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Humanoids\FrostTroll.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Humanoids\IceFiend.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Humanoids\Imp.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Humanoids\RatmanArcher.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Humanoids\RatmanMage.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Humanoids\Titan.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianArchmage.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianKnight.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianMage.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianMatriarch.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Ophidians\OphidianWarrior.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Plants\SwampTentacle.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Reptile\StoneHarpy.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Reptile\WhiteWyrm.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Reptile\Wyvern.cs" />
+    <Compile Include="Mobiles\T2A\Monsters\Slimes\FrostOoze.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Terathans\TerathanAvenger.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Terathans\TerathanDrone.cs" />
     <Compile Include="Mobiles\T2A\Monsters\Terathans\TerathanMatriarch.cs" />
