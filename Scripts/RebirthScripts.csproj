@@ -205,6 +205,7 @@
     <Compile Include="Commands\Handlers.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Commands\Impassable.cs" />
     <Compile Include="Commands\Logging.cs">
       <SubType>Code</SubType>
     </Compile>
