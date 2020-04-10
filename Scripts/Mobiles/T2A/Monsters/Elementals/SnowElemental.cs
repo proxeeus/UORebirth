@@ -33,7 +33,9 @@ namespace Server.Mobiles
 			Item ore = new IronOre( 3 );
 			ore.ItemID = 0x19B8;
 			PackItem( ore );
-		}
+
+            GenerateLoot();
+        }
 
 		public override void GenerateLoot()
 		{

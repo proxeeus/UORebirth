@@ -33,7 +33,10 @@ namespace Server.Mobiles
 
 			PackItem( new BlackPearl() );
 			PackReg( 3 );
-		}
+
+            GenerateLoot();
+
+        }
 
 		public override void GenerateLoot()
 		{
