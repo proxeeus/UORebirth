@@ -2,23 +2,25 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Server.Mobiles.PlayerBot
+namespace Server.Mobiles
 {
     public class PlayerBotPersona
     {
-        public enum Profile
+        public PlayerBotProfile Profile { get; set; }
+        public PlayerBotExperience Experience { get; set; }
+        public enum PlayerBotProfile
         {
-            PlayerKiller,
-            Crafter,
-            Adventurer
+            PlayerKiller = 0,
+            Crafter = 1,
+            Adventurer = 2
         }
 
-        public enum Experience
+        public enum PlayerBotExperience
         {
-            Newbie,
-            Average,
-            Proficient,
-            Grandmaster
+            Newbie = 0,
+            Average = 1,
+            Proficient = 2,
+            Grandmaster = 3
         }
     }
 }

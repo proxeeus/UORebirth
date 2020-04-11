@@ -4,7 +4,7 @@ using Server;
 using Server.Mobiles;
 using Server.Items;
 using Server.Guilds;
-using Server.Mobiles.PlayerBot;
+using Server.Mobiles;
 
 namespace Server
 {

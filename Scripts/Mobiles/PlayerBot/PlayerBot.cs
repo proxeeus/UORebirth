@@ -5,22 +5,43 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Server.Mobiles.PlayerBot
+
+namespace Server.Mobiles
 {
     public class PlayerBot : BaseCreature
     {
-        private PlayerBotPersona m_Persona;
+        private PlayerBotPersona m_Persona ;
+        private bool m_IsPlayerKiller;
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public PlayerBotPersona.PlayerBotProfile PlayerBotProfile { get { return m_Persona.Profile; } set { m_Persona.Profile = value; } }
+        [CommandProperty(AccessLevel.GameMaster)]
+        public PlayerBotPersona.PlayerBotExperience PlayerBotExperience { get { return m_Persona.Experience; } set { m_Persona.Experience = value; } }
+
+        public override bool AlwaysMurderer { get { return m_IsPlayerKiller; } }
 
         public static string[] m_GuildTypes = new string[] { "", " (Chaos)", " (Order)" };
+
+        private bool IsPlayerKiller()
+        {
+            if (m_Persona.Profile == PlayerBotPersona.PlayerBotProfile.PlayerKiller)
+                return true;
+            return false;
+        }
+
 
         #region Constructors
         public PlayerBot(AIType AI) : base(AI, FightMode.Agressor, 10, 1, 0.5, 0.75)
         {
             InitPersona();
             InitBody();
+            InitStats();
+            InitSkills();
             InitOutfit();
-
         }
+
+
+
         [Constructable]
         public PlayerBot() : this(AIType.AI_PlayerBot)
         {
@@ -39,8 +60,9 @@ namespace Server.Mobiles.PlayerBot
 
             writer.Write((int)0); // version 
 
-            // Here should go all private shit that needs to be serialized
-            //writer.Write((int)m_Bank);
+            writer.Write((int)m_Persona.Experience);
+            writer.Write((int)m_Persona.Profile);
+            writer.Write((bool)m_IsPlayerKiller);
         }
 
         public override void Deserialize(GenericReader reader)
@@ -48,24 +70,54 @@ namespace Server.Mobiles.PlayerBot
             base.Deserialize(reader);
             int version = reader.ReadInt();
 
-            // Here should go all pricate shit that needs to be deserialized
-            //m_Bank = reader.ReadInt();
+            m_Persona = new PlayerBotPersona();
 
-            //if (this.Controled)
-            //{
-            //    m_Timer = new PayTimer(this);
-            //    m_Timer.Start();
-            //}
+            m_Persona.Experience = (PlayerBotPersona.PlayerBotExperience)reader.ReadInt();
+            m_Persona.Profile = (PlayerBotPersona.PlayerBotProfile)reader.ReadInt();
+            m_IsPlayerKiller = reader.ReadBool();
         }
         #endregion
 
+        #region Inits
         private void InitPersona()
         {
             // Note about Titles (Karma & Professions)
             // They do not need to be set at creation time. They're handled in Titles.cs, same way as real players.
             // So it'll be possible to see "The Glorious Lord Soandso, Grandmaster Swordsman" instead of traditional NPC titles.
+            m_Persona = new PlayerBotPersona();
 
+            switch (Utility.Random(3))
+            {
+                case 0:
+                    m_Persona.Profile = PlayerBotPersona.PlayerBotProfile.PlayerKiller;
+                    break;
+                case 1:
+                    m_Persona.Profile = PlayerBotPersona.PlayerBotProfile.Crafter;
+                    break;
+                case 2:
+                    m_Persona.Profile = PlayerBotPersona.PlayerBotProfile.Adventurer;
+                    break;
+            }
+
+            switch(Utility.Random(4))
+            {
+                case 0:
+                    m_Persona.Experience = PlayerBotPersona.PlayerBotExperience.Newbie;
+                    break;
+                case 1:
+                    m_Persona.Experience = PlayerBotPersona.PlayerBotExperience.Average;
+                    break;
+                case 2:
+                    m_Persona.Experience = PlayerBotPersona.PlayerBotExperience.Proficient;
+                    break;
+                case 3:
+                    m_Persona.Experience = PlayerBotPersona.PlayerBotExperience.Grandmaster;
+                    break;
+            }
+
+            m_IsPlayerKiller = IsPlayerKiller();
         }
+
 
         public virtual void InitBody()
         {
@@ -83,6 +135,87 @@ namespace Server.Mobiles.PlayerBot
                     Body = 400;
                     Name = NameList.RandomName("male");
                 }
+            }
+        }
+
+        private void InitStats()
+        {
+            switch(m_Persona.Experience)
+            {
+                case PlayerBotPersona.PlayerBotExperience.Newbie:
+                    SetStr(30, 35);
+                    SetDex(30, 35);
+                    SetInt(30, 35);
+                    break;
+                case PlayerBotPersona.PlayerBotExperience.Average:
+                    SetStr(45, 65);
+                    SetDex(45, 65);
+                    SetInt(45, 65);
+                    break;
+                case PlayerBotPersona.PlayerBotExperience.Proficient:
+                    SetStr(70, 85);
+                    SetDex(70, 85);
+                    SetInt(70, 85);
+                    break;
+                case PlayerBotPersona.PlayerBotExperience.Grandmaster:
+                    SetStr(95, 100);
+                    SetDex(95, 100);
+                    SetInt(95, 100);
+                    break;
+            }
+
+            SetHits(Str);
+
+        }
+
+        private void InitSkills()
+        {
+            var meleeFighter = Utility.RandomBool();
+            var preferedMeleeSkill = Utility.Random(4);
+            SkillName skill = 0;
+
+            if(meleeFighter)
+            {
+                if (preferedMeleeSkill == 0)
+                    skill = SkillName.Swords;
+                else if (preferedMeleeSkill == 1)
+                    skill = SkillName.Macing;
+                else if (preferedMeleeSkill == 2)
+                    skill = SkillName.Fencing;
+                else if (preferedMeleeSkill == 3)
+                    skill = SkillName.Wrestling;
+            }
+            else
+            {
+                skill = SkillName.Archery;
+            }
+
+            switch(m_Persona.Experience)
+            {
+                case PlayerBotPersona.PlayerBotExperience.Newbie:
+                    SetSkill(SkillName.Tactics, 15, 35.5);
+                    SetSkill(SkillName.MagicResist, 15, 35.5);
+                    SetSkill(SkillName.Parry, 15, 35.5);
+                    SetSkill(skill, 15, 35.5);
+                    break;
+                case PlayerBotPersona.PlayerBotExperience.Average:
+                    SetSkill(SkillName.Tactics, 45, 55.5);
+                    SetSkill(SkillName.MagicResist, 45, 55.5);
+                    SetSkill(SkillName.Parry, 45, 55.5);
+                    SetSkill(skill, 45, 55.5);
+                    break;
+                case PlayerBotPersona.PlayerBotExperience.Proficient:
+                    SetSkill(SkillName.Tactics, 65.5, 85);
+                    SetSkill(SkillName.MagicResist, 65.5, 85);
+                    SetSkill(SkillName.Parry, 65.5, 85);
+                    SetSkill(skill, 65.5, 85);
+                    break;
+                case PlayerBotPersona.PlayerBotExperience.Grandmaster:
+                    SetSkill(SkillName.Tactics, 95, 100);
+                    SetSkill(SkillName.MagicResist, 95, 100);
+                    SetSkill(SkillName.Parry, 95, 100);
+                    SetSkill(skill, 95, 100);
+                    break;
             }
         }
 
@@ -105,8 +238,12 @@ namespace Server.Mobiles.PlayerBot
                 if (Utility.RandomBool())
                     AddRandomFacialHair(hairHue);   // Keep facial hair hue consistent with base hair hue
             }
-        }
 
+
+        }
+        #endregion
+
+        #region Overrides
         public override void OnSingleClick(Mobile from)
         {
             if (Deleted || (AccessLevel == AccessLevel.Player && DisableHiddenSelfClick && Hidden && from == this))
@@ -198,6 +335,8 @@ namespace Server.Mobiles.PlayerBot
 
             base.OnSpeech(e);
         }
+
+        #endregion
 
         public virtual Mobile GetOwner()
         {
