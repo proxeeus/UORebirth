@@ -1,4 +1,6 @@
 ﻿using Server.Items;
+using Server.Network;
+using Server.Spells;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -9,12 +11,15 @@ namespace Server.Mobiles.PlayerBot
     {
         private PlayerBotPersona m_Persona;
 
+        public static string[] m_GuildTypes = new string[] { "", " (Chaos)", " (Order)" };
+
         #region Constructors
         public PlayerBot(AIType AI) : base(AI, FightMode.Agressor, 10, 1, 0.5, 0.75)
         {
             InitPersona();
             InitBody();
             InitOutfit();
+
         }
         [Constructable]
         public PlayerBot() : this(AIType.AI_PlayerBot)
@@ -56,6 +61,9 @@ namespace Server.Mobiles.PlayerBot
 
         private void InitPersona()
         {
+            // Note about Titles (Karma & Professions)
+            // They do not need to be set at creation time. They're handled in Titles.cs, same way as real players.
+            // So it'll be possible to see "The Glorious Lord Soandso, Grandmaster Swordsman" instead of traditional NPC titles.
 
         }
 
@@ -97,6 +105,67 @@ namespace Server.Mobiles.PlayerBot
                 if (Utility.RandomBool())
                     AddRandomFacialHair(hairHue);   // Keep facial hair hue consistent with base hair hue
             }
+        }
+
+        public override void OnSingleClick(Mobile from)
+        {
+            if (Deleted || (AccessLevel == AccessLevel.Player && DisableHiddenSelfClick && Hidden && from == this))
+                return;
+
+            if (Mobile.GuildClickMessage)
+            {
+                Server.Guilds.Guild guild = this.Guild as Server.Guilds.Guild;
+
+                if (guild != null && (this.DisplayGuildTitle || guild.Type != Server.Guilds.GuildType.Regular))
+                {
+                    string title = GuildTitle;
+                    string type;
+
+                    if (title == null)
+                        title = "";
+                    else
+                        title = title.Trim();
+
+                    if (guild.Type >= 0 && (int)guild.Type < m_GuildTypes.Length)
+                        type = m_GuildTypes[(int)guild.Type];
+                    else
+                        type = "";
+
+                    string text = String.Format(title.Length <= 0 ? "[{1}]{2}" : "[{0}, {1}]{2}", title, guild.Abbreviation, type);
+
+                    PrivateOverheadMessage(MessageType.Regular, SpeechHue, true, text, from.NetState);
+                }
+            }
+
+            int hue;
+
+            if (NameHue != -1)
+                hue = NameHue;
+            else if (AccessLevel > AccessLevel.Player)
+                hue = 11;
+            else
+                hue = Notoriety.GetHue(Notoriety.Compute(from, this));
+
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+
+            if ((Karma >= (int)Noto.LordLady || Karma <= (int)Noto.Dark))
+                sb.Append(Female ? "Lady " : "Lord ");
+
+            sb.Append(Name);
+
+            if (ClickTitle && Title != null && Title.Length > 0)
+            {
+                sb.Append(' ');
+                sb.Append(Title);
+            }
+
+            if (Frozen || Paralyzed || (this.Spell != null && this.Spell is Spell && this.Spell.IsCasting && ((Spell)this.Spell).BlocksMovement))
+                sb.Append(" (frozen)");
+
+            if (Blessed)
+                sb.Append(" (invulnerable)");
+
+            PrivateOverheadMessage(MessageType.Label, hue, Mobile.AsciiClickMessage, sb.ToString(), from.NetState);
         }
 
         public override bool HandlesOnSpeech(Mobile from)

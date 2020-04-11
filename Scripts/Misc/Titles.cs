@@ -4,6 +4,7 @@ using Server;
 using Server.Mobiles;
 using Server.Items;
 using Server.Guilds;
+using Server.Mobiles.PlayerBot;
 
 namespace Server
 {
@@ -164,7 +165,7 @@ namespace Server.Misc
 
 		public static string GetNotoTitle( Mobile beheld )
 		{
-			if ( beheld.ShowFameTitle && beheld.Player )
+			if ( (beheld.ShowFameTitle && beheld.Player) || beheld is PlayerBot )
 			{
 				int karma = beheld.Karma;
 				int t;
@@ -200,37 +201,46 @@ namespace Server.Misc
 			}
 		}
 
+        private static void ComputePlayerTitle(Mobile beholder, Mobile beheld, StringBuilder title)
+        {
+            Skill highest = GetHighestSkill(beheld);// beheld.Skills.Highest;
+
+            if (highest != null)
+            {
+                string skillTitle = highest.Info.Title;
+                string skillLevel;
+                if (highest.BaseFixedPoint >= 300)
+                    skillLevel = (string)Utility.GetArrayCap(m_Levels, (highest.BaseFixedPoint - 300) / 100);
+                else
+                    skillLevel = m_Levels[0];
+
+                if (beheld.Female)
+                {
+                    if (skillTitle.EndsWith("man"))
+                        skillTitle = skillTitle.Substring(0, skillTitle.Length - 3) + "woman";
+                }
+
+                title.AppendFormat(", {0} {1}", skillLevel, skillTitle);
+            }
+        }
+
 		public static string ComputeTitle( Mobile beholder, Mobile beheld )
 		{
 			StringBuilder title = new StringBuilder( GetNotoTitle( beheld ) );
 			string customTitle = beheld.Title;
 
-			if ( customTitle != null && (customTitle = customTitle.Trim()).Length > 0 )
+            if(beheld is PlayerBot && (beholder == beheld || Math.Abs( beheld.Karma ) >= (int)Noto.NobleLordLady || (beholder != null && beholder.AccessLevel > beheld.AccessLevel)))
+            {
+                ComputePlayerTitle(beholder, beheld, title);
+            }
+			else if ( customTitle != null && (customTitle = customTitle.Trim()).Length > 0 )
 			{
 				title.AppendFormat( " {0}", customTitle );
 			}
 			else if ( beheld.Player && beheld.ShowFameTitle && ( beholder == beheld || Math.Abs( beheld.Karma ) >= (int)Noto.NobleLordLady || ( beholder != null && beholder.AccessLevel > beheld.AccessLevel ) ) ) 
 			{
-				Skill highest = GetHighestSkill( beheld );// beheld.Skills.Highest;
-
-				if ( highest != null )
-				{
-					string skillTitle = highest.Info.Title;
-					string skillLevel;
-					if ( highest.BaseFixedPoint >= 300 )
-						skillLevel = (string)Utility.GetArrayCap( m_Levels, (highest.BaseFixedPoint - 300) / 100 );
-					else
-						skillLevel = m_Levels[0];
-
-					if ( beheld.Female )
-					{
-						if ( skillTitle.EndsWith( "man" ) )
-							skillTitle = skillTitle.Substring( 0, skillTitle.Length - 3 ) + "woman";
-					}
-
-					title.AppendFormat( ", {0} {1}", skillLevel, skillTitle );
-				}
-			}
+                ComputePlayerTitle(beholder, beheld, title);
+            }
 
 			return title.ToString();
 		}
