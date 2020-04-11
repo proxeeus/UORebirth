@@ -3716,6 +3716,8 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Mobiles\PlayerBot\PlayerBot.cs" />
+    <Compile Include="Mobiles\PlayerBot\PlayerBotAI.cs" />
+    <Compile Include="Mobiles\PlayerBot\PlayerBotPersona.cs" />
     <Compile Include="Mobiles\PlayerMobile.cs">
       <SubType>Code</SubType>
     </Compile>

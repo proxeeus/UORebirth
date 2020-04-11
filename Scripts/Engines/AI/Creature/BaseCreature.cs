@@ -1656,6 +1656,9 @@ namespace Server.Mobiles
 				case AIType.AI_TeleHideMage:
 					m_AI = new TeleHideAI(this);
 					break;
+                case AIType.AI_PlayerBot:
+                    m_AI = new PlayerBotAI(this);
+                    break;
 			}
 		}
 
