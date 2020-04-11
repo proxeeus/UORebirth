@@ -3715,6 +3715,7 @@
     <Compile Include="Mobiles\Monsters\Zombie.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Mobiles\PlayerBot\PlayerBot.cs" />
     <Compile Include="Mobiles\PlayerMobile.cs">
       <SubType>Code</SubType>
     </Compile>
