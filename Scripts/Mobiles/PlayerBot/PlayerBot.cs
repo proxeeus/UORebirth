@@ -10,15 +10,27 @@ namespace Server.Mobiles
 {
     public class PlayerBot : BaseCreature
     {
+        static Random m_Rnd = new Random();
+
         private PlayerBotPersona m_Persona ;
         private bool m_IsPlayerKiller;
+        private bool m_PrefersMelee;
+        private SkillName m_PreferedCombatSkill;
 
+        #region Accessors
         [CommandProperty(AccessLevel.GameMaster)]
         public PlayerBotPersona.PlayerBotProfile PlayerBotProfile { get { return m_Persona.Profile; } set { m_Persona.Profile = value; } }
         [CommandProperty(AccessLevel.GameMaster)]
         public PlayerBotPersona.PlayerBotExperience PlayerBotExperience { get { return m_Persona.Experience; } set { m_Persona.Experience = value; } }
 
         public override bool AlwaysMurderer { get { return m_IsPlayerKiller; } }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool PrefersMelee { get { return m_PrefersMelee; } set { m_PrefersMelee = value; } }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public SkillName PreferedCombatSkill { get { return m_PreferedCombatSkill; } set { m_PreferedCombatSkill = value; } }
+        #endregion
 
         public static string[] m_GuildTypes = new string[] { "", " (Chaos)", " (Order)" };
 
@@ -63,6 +75,8 @@ namespace Server.Mobiles
             writer.Write((int)m_Persona.Experience);
             writer.Write((int)m_Persona.Profile);
             writer.Write((bool)m_IsPlayerKiller);
+            writer.Write((bool)m_PrefersMelee);
+            writer.Write((int)m_PreferedCombatSkill);
         }
 
         public override void Deserialize(GenericReader reader)
@@ -75,6 +89,8 @@ namespace Server.Mobiles
             m_Persona.Experience = (PlayerBotPersona.PlayerBotExperience)reader.ReadInt();
             m_Persona.Profile = (PlayerBotPersona.PlayerBotProfile)reader.ReadInt();
             m_IsPlayerKiller = reader.ReadBool();
+            m_PrefersMelee = reader.ReadBool();
+            m_PreferedCombatSkill = (SkillName)reader.ReadInt();
         }
         #endregion
 
@@ -170,11 +186,11 @@ namespace Server.Mobiles
 
         private void InitSkills()
         {
-            var meleeFighter = Utility.RandomBool();
+            m_PrefersMelee = Utility.RandomBool();
             var preferedMeleeSkill = Utility.Random(4);
             SkillName skill = 0;
 
-            if(meleeFighter)
+            if(m_PrefersMelee)
             {
                 if (preferedMeleeSkill == 0)
                     skill = SkillName.Swords;
@@ -189,6 +205,8 @@ namespace Server.Mobiles
             {
                 skill = SkillName.Archery;
             }
+
+            PreferedCombatSkill = skill;
 
             switch(m_Persona.Experience)
             {
@@ -221,26 +239,132 @@ namespace Server.Mobiles
 
         public virtual void InitOutfit()
         {
+            InitHair();
+
+            InitWeapon();
+
+            // InitArmor();
+
+            // InitWearable(); // robes, sashes, kilts etc. Fancy shit.
+
+        }
+
+        private void InitWeapon()
+        {
+            switch (m_Persona.Experience)
+            {
+                case PlayerBotPersona.PlayerBotExperience.Newbie:
+                case PlayerBotPersona.PlayerBotExperience.Average:
+                case PlayerBotPersona.PlayerBotExperience.Proficient:
+                case PlayerBotPersona.PlayerBotExperience.Grandmaster:
+                    if (m_PrefersMelee)
+                    {
+                        if(PreferedCombatSkill != SkillName.Wrestling)
+                        {
+                            AddItem(GenerateWeapon());
+                        }    
+                    }
+                    else
+                    {
+                        AddItem(new Bow());
+                        PackItem(new Arrow(Utility.Random(50, 100)));
+                        PackItem(new Dagger());      // in case he's out of arrows ... ?
+                    }
+                    break;
+            }
+        }
+
+        private void InitHair()
+        {
             var hairHue = Utility.RandomHairHue();
 
-            switch (Utility.Random(6))
-            {
-                case 0: AddItem(new ShortHair(hairHue)); break;
-                case 1: AddItem(new TwoPigTails(hairHue)); break;
-                case 2: AddItem(new ReceedingHair(hairHue)); break;
-                case 3: AddItem(new KrisnaHair(hairHue)); break;
-                case 4: AddItem(new LongHair(hairHue)); break;
-                case 5: AddItem(new PageboyHair(hairHue)); break;
-            }
+            Utility.AssignRandomHair(this, hairHue);
 
-            if(!Female)
+            if (!Female)
             {
                 if (Utility.RandomBool())
                     AddRandomFacialHair(hairHue);   // Keep facial hair hue consistent with base hair hue
             }
-
-
         }
+
+        private BaseWeapon GenerateWeapon()
+        {
+            var weaponPool = new List<BaseWeapon>();
+            BaseWeapon weapon = null;
+
+            if (PreferedCombatSkill == SkillName.Swords)
+            {
+                if (Str >= 25)
+                {
+                    weaponPool.Add(new Broadsword());
+                    weaponPool.Add(new Cutlass());
+                    weaponPool.Add(new Katana());
+                    weaponPool.Add(new Scimitar());
+                }
+                if (Str >= 35)
+                {
+                    weaponPool.Add(new Longsword());
+
+                }
+                if (Str >= 40)
+                {
+                    weaponPool.Add(new VikingSword());
+                }
+            }
+            else if (PreferedCombatSkill == SkillName.Macing)
+            {
+                if(Str >= 10)
+                {
+                    weaponPool.Add(new Club());
+                }
+                if(Str >= 20)
+                {
+                    weaponPool.Add(new Mace());
+                    weaponPool.Add(new Maul());
+                }
+                if(Str >= 30)
+                {
+                    weaponPool.Add(new WarMace());
+                }
+                if(Str >= 35)
+                {
+                    weaponPool.Add(new HammerPick());
+                }
+                if(Str >= 40)
+                {
+                    weaponPool.Add(new Scepter());
+                    weaponPool.Add(new WarHammer());
+                }
+            }
+            else if (PreferedCombatSkill == SkillName.Fencing)
+            {
+                if(Str >= 10)
+                {
+                    weaponPool.Add(new Pitchfork());
+                }
+                if(Str >= 15)
+                {
+                    weaponPool.Add(new ShortSpear());
+                }
+                if(Str >= 30)
+                {
+                    weaponPool.Add(new Spear());
+                }
+                if(Str >= 35)
+                {
+                    weaponPool.Add(new WarFork());
+                }
+                if(Str >= 50)
+                {
+                    weaponPool.Add(new Pike());
+                }
+            }
+
+            var weaponIndex = m_Rnd.Next(weaponPool.Count);
+            weapon = weaponPool[weaponIndex];
+            return weapon;
+        }
+
         #endregion
 
         #region Overrides
