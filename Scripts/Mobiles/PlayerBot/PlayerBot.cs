@@ -243,10 +243,120 @@ namespace Server.Mobiles
 
             InitWeapon();
 
-            // InitArmor();
+            InitArmor();
 
             // InitWearable(); // robes, sashes, kilts etc. Fancy shit.
 
+        }
+
+        private void InitArmor()
+        {
+            // Determine armor type based on skills and stats
+            ArmorMaterialType armorType = DetermineArmorType();
+            
+            // Add armor pieces based on the determined type
+            switch (armorType)
+            {
+                case ArmorMaterialType.Leather:
+                    AddItem(new LeatherChest());
+                    AddItem(new LeatherArms());
+                    AddItem(new LeatherGloves());
+                    AddItem(new LeatherGorget());
+                    AddItem(new LeatherLegs());
+                    AddItem(new LeatherCap());
+                    AddItem(new Boots());  // Leather armor gets standard boots
+                    break;
+                    
+                case ArmorMaterialType.Studded:
+                    AddItem(new StuddedChest());
+                    AddItem(new StuddedArms());
+                    AddItem(new StuddedGloves());
+                    AddItem(new StuddedGorget());
+                    AddItem(new StuddedLegs());
+                    AddItem(new LeatherCap());  // StuddedCap doesn't exist, using LeatherCap instead
+                    AddItem(new Boots());  // Studded armor gets standard boots
+                    break;
+                    
+                case ArmorMaterialType.Chainmail:
+                    AddItem(new ChainChest());
+                    AddItem(new ChainLegs());
+                    AddItem(new ChainCoif());
+                    AddItem(new RingmailGloves());
+                    AddItem(new StuddedGorget());
+                    AddItem(new ThighBoots());  // Chainmail gets thigh boots for better protection
+                    break;
+                    
+                case ArmorMaterialType.Ringmail:
+                    AddItem(new RingmailChest());
+                    AddItem(new RingmailLegs());
+                    AddItem(new RingmailArms());
+                    AddItem(new RingmailGloves());
+                    AddItem(new ChainCoif());
+                    AddItem(new PlateGorget());
+                    AddItem(new ThighBoots());  // Ringmail gets thigh boots for better protection
+                    break;
+                    
+                case ArmorMaterialType.Plate:
+                    AddItem(new PlateChest());
+                    AddItem(new PlateLegs());
+                    AddItem(new PlateArms());
+                    AddItem(new PlateGloves());
+                    AddItem(new PlateHelm());
+                    AddItem(new PlateGorget());
+                    AddItem(new ThighBoots());  // Plate armor gets thigh boots for maximum protection
+                    break;
+            }
+
+            // Add shield if the bot has parry skill
+            if (Skills[SkillName.Parry].Base > 0)
+            {
+                if (Skills[SkillName.Parry].Base >= 50)
+                    AddItem(new MetalShield());
+                else
+                    AddItem(new WoodenShield());
+            }
+        }
+
+        private ArmorMaterialType DetermineArmorType()
+        {
+            // Get base stats
+            int str = this.Str;
+            int dex = this.Dex;
+            
+            // Get relevant skills
+            double parry = Skills[SkillName.Parry].Base;
+            double armsLore = Skills[SkillName.ArmsLore].Base;
+            
+            // Consider experience level
+            switch (m_Persona.Experience)
+            {
+                case PlayerBotPersona.PlayerBotExperience.Newbie:
+                    return ArmorMaterialType.Leather;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Average:
+                    if (str >= 40 && dex >= 40)
+                        return ArmorMaterialType.Studded;
+                    return ArmorMaterialType.Leather;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Proficient:
+                    if (str >= 60 && dex >= 40)
+                        return ArmorMaterialType.Chainmail;
+                    if (str >= 50 && dex >= 50)
+                        return ArmorMaterialType.Studded;
+                    return ArmorMaterialType.Leather;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Grandmaster:
+                    if (str >= 80 && dex >= 40)
+                        return ArmorMaterialType.Plate;
+                    if (str >= 70 && dex >= 50)
+                        return ArmorMaterialType.Ringmail;
+                    if (str >= 60 && dex >= 60)
+                        return ArmorMaterialType.Chainmail;
+                    return ArmorMaterialType.Studded;
+                    
+                default:
+                    return ArmorMaterialType.Leather;
+            }
         }
 
         private void InitWeapon()
@@ -261,29 +371,62 @@ namespace Server.Mobiles
                     {
                         if(PreferedCombatSkill != SkillName.Wrestling)
                         {
-                            AddItem(GenerateWeapon());
+                            BaseWeapon weapon = GenerateWeapon();
+                            if (weapon != null)
+                            {
+                                AddItem(weapon);
+                            }
                         }    
                     }
                     else
                     {
-                        AddItem(new Bow());
-                        PackItem(new Arrow(Utility.Random(50, 100)));
-                        PackItem(new Dagger());      // in case he's out of arrows ... ?
+                        // Add appropriate ranged weapon based on experience level
+                        if (m_Persona.Experience == PlayerBotPersona.PlayerBotExperience.Grandmaster && Utility.RandomBool())
+                        {
+                            // T2A weapons for grandmasters
+                            switch (Utility.Random(4))
+                            {
+                                case 0:
+                                    AddItem(new JukaBow());
+                                    break;
+                                case 1:
+                                    AddItem(new RepeatingCrossbow());
+                                    break;
+                                case 2:
+                                    AddItem(new CompositeBow());
+                                    break;
+                                case 3:
+                                    AddItem(new HeavyCrossbow());
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            // Classic ranged weapons
+                            if (Utility.RandomBool())
+                            {
+                                AddItem(new Bow());
+                            }
+                            else
+                            {
+                                AddItem(new Crossbow());
+                            }
+                        }
+                        
+                        // Add appropriate ammunition
+                        if (Skills[SkillName.Archery].Base >= 50)
+                        {
+                            PackItem(new Arrow(Utility.Random(100, 200)));
+                        }
+                        else
+                        {
+                            PackItem(new Arrow(Utility.Random(50, 100)));
+                        }
+                        
+                        // Add backup weapon
+                        PackItem(new Dagger());
                     }
                     break;
-            }
-        }
-
-        private void InitHair()
-        {
-            var hairHue = Utility.RandomHairHue();
-
-            Utility.AssignRandomHair(this, hairHue);
-
-            if (!Female)
-            {
-                if (Utility.RandomBool())
-                    AddRandomFacialHair(hairHue);   // Keep facial hair hue consistent with base hair hue
             }
         }
 
@@ -300,15 +443,27 @@ namespace Server.Mobiles
                     weaponPool.Add(new Cutlass());
                     weaponPool.Add(new Katana());
                     weaponPool.Add(new Scimitar());
+                    weaponPool.Add(new Kryss());
+                    weaponPool.Add(new Axe());
+                    weaponPool.Add(new BattleAxe());
+                }
+                if (Str >= 30)
+                {
+                    weaponPool.Add(new DoubleAxe());
+                    weaponPool.Add(new LargeBattleAxe());
                 }
                 if (Str >= 35)
                 {
                     weaponPool.Add(new Longsword());
-
+                    weaponPool.Add(new ExecutionersAxe());
+                    weaponPool.Add(new TwoHandedAxe());
+                    weaponPool.Add(new Bardiche());
+                    weaponPool.Add(new Halberd());
                 }
                 if (Str >= 40)
                 {
                     weaponPool.Add(new VikingSword());
+                    weaponPool.Add(new WarAxe());
                 }
             }
             else if (PreferedCombatSkill == SkillName.Macing)
@@ -349,6 +504,9 @@ namespace Server.Mobiles
                 if(Str >= 30)
                 {
                     weaponPool.Add(new Spear());
+                    weaponPool.Add(new BladedStaff());
+                    weaponPool.Add(new DoubleBladedStaff());
+                    weaponPool.Add(new TribalSpear());
                 }
                 if(Str >= 35)
                 {
@@ -359,10 +517,71 @@ namespace Server.Mobiles
                     weaponPool.Add(new Pike());
                 }
             }
+            else if (PreferedCombatSkill == SkillName.Wrestling)
+            {
+                // Wrestling doesn't use weapons, but we could add some utility items
+                // For now, we'll skip weapon assignment for wrestlers
+                return null;
+            }
+            else if (PreferedCombatSkill == SkillName.Archery)
+            {
+                // Archery is handled in InitWeapon(), not here
+                return null;
+            }
 
-            var weaponIndex = m_Rnd.Next(weaponPool.Count);
-            weapon = weaponPool[weaponIndex];
+            // Add Knives for utility (lower strength requirements)
+            if (Str >= 10)
+            {
+                weaponPool.Add(new Dagger());
+                weaponPool.Add(new ButcherKnife());
+                weaponPool.Add(new Cleaver());
+            }
+            if (Str >= 15)
+            {
+                weaponPool.Add(new SkinningKnife());
+            }
+
+            // Add Staves (magical weapons)
+            if (Str >= 10)
+            {
+                weaponPool.Add(new QuarterStaff());
+            }
+            if (Str >= 20)
+            {
+                weaponPool.Add(new BlackStaff());
+                weaponPool.Add(new GnarledStaff());
+            }
+            if (Str >= 25)
+            {
+                weaponPool.Add(new ShepherdsCrook());
+            }
+
+            // Add Pole Arms (high strength requirements)
+            if (Str >= 35)
+            {
+                weaponPool.Add(new Scythe());
+            }
+
+            if (weaponPool.Count > 0)
+            {
+                var weaponIndex = m_Rnd.Next(weaponPool.Count);
+                weapon = weaponPool[weaponIndex];
+            }
+            
             return weapon;
+        }
+
+        private void InitHair()
+        {
+            var hairHue = Utility.RandomHairHue();
+
+            Utility.AssignRandomHair(this, hairHue);
+
+            if (!Female)
+            {
+                if (Utility.RandomBool())
+                    AddRandomFacialHair(hairHue);   // Keep facial hair hue consistent with base hair hue
+            }
         }
 
         #endregion
