@@ -48,8 +48,9 @@ namespace Server.Mobiles
             InitPersona();
             InitBody();
             InitStats();
-            InitSkills();
+            InitCombatSkills();
             InitOutfit();
+            InitConsumables();
         }
 
 
@@ -184,7 +185,7 @@ namespace Server.Mobiles
 
         }
 
-        private void InitSkills()
+        private void InitCombatSkills()
         {
             m_PrefersMelee = Utility.RandomBool();
             var preferedMeleeSkill = Utility.Random(4);
@@ -240,11 +241,8 @@ namespace Server.Mobiles
         public virtual void InitOutfit()
         {
             InitHair();
-
             InitWeapon();
-
             InitArmor();
-
             // InitWearable(); // robes, sashes, kilts etc. Fancy shit.
 
         }
@@ -381,22 +379,24 @@ namespace Server.Mobiles
                     else
                     {
                         // Add appropriate ranged weapon based on experience level
+                        BaseRanged rangedWeapon = null;
+                        
                         if (m_Persona.Experience == PlayerBotPersona.PlayerBotExperience.Grandmaster && Utility.RandomBool())
                         {
                             // T2A weapons for grandmasters
                             switch (Utility.Random(4))
                             {
                                 case 0:
-                                    AddItem(new JukaBow());
+                                    rangedWeapon = new JukaBow();
                                     break;
                                 case 1:
-                                    AddItem(new RepeatingCrossbow());
+                                    rangedWeapon = new RepeatingCrossbow();
                                     break;
                                 case 2:
-                                    AddItem(new CompositeBow());
+                                    rangedWeapon = new CompositeBow();
                                     break;
                                 case 3:
-                                    AddItem(new HeavyCrossbow());
+                                    rangedWeapon = new HeavyCrossbow();
                                     break;
                             }
                         }
@@ -405,22 +405,26 @@ namespace Server.Mobiles
                             // Classic ranged weapons
                             if (Utility.RandomBool())
                             {
-                                AddItem(new Bow());
+                                rangedWeapon = new Bow();
                             }
                             else
                             {
-                                AddItem(new Crossbow());
+                                rangedWeapon = new Crossbow();
                             }
                         }
                         
-                        // Add appropriate ammunition
-                        if (Skills[SkillName.Archery].Base >= 50)
+                        AddItem(rangedWeapon);
+                        
+                        // Add appropriate ammunition based on weapon type
+                        if (rangedWeapon is Bow || rangedWeapon is CompositeBow || rangedWeapon is JukaBow)
                         {
+                            // Bow-type weapons use arrows
                             PackItem(new Arrow(Utility.Random(100, 200)));
                         }
-                        else
+                        else if (rangedWeapon is Crossbow || rangedWeapon is HeavyCrossbow || rangedWeapon is RepeatingCrossbow)
                         {
-                            PackItem(new Arrow(Utility.Random(50, 100)));
+                            // Crossbow-type weapons use bolts
+                            PackItem(new Bolt(Utility.Random(100, 200)));
                         }
                         
                         // Add backup weapon
@@ -569,6 +573,118 @@ namespace Server.Mobiles
             }
             
             return weapon;
+        }
+
+        private void InitConsumables()
+        {
+            // Base consumables for all bots
+            PackItem(new Bandage(Utility.Random(10, 25)));
+            
+            // Food items
+            PackItem(new Apple(Utility.Random(3, 8)));
+            PackItem(new BreadLoaf(Utility.Random(2, 5)));
+            
+            // Experience-based consumables
+            switch (m_Persona.Experience)
+            {
+                case PlayerBotPersona.PlayerBotExperience.Newbie:
+                    // Basic supplies for newbies
+                    PackItem(new Bandage(Utility.Random(5, 15)));
+                    PackItem(new Apple(Utility.Random(2, 4)));
+                    PackItem(new BreadLoaf(Utility.Random(1, 3)));
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Average:
+                    // Moderate supplies
+                    PackItem(new Bandage(Utility.Random(15, 30)));
+                    PackItem(new Apple(Utility.Random(4, 8)));
+                    PackItem(new BreadLoaf(Utility.Random(2, 5)));
+                    PackItem(new CheeseWheel(Utility.Random(1, 3)));
+                    PackItem(new CookedBird(Utility.Random(1, 3)));
+                    
+                    // Basic potions
+                    if (Utility.RandomBool())
+                        PackItem(new LesserHealPotion());
+                    if (Utility.RandomBool())
+                        PackItem(new LesserCurePotion());
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Proficient:
+                    // Good supplies
+                    PackItem(new Bandage(Utility.Random(25, 50)));
+                    PackItem(new Apple(Utility.Random(6, 12)));
+                    PackItem(new BreadLoaf(Utility.Random(3, 7)));
+                    PackItem(new CheeseWheel(Utility.Random(2, 5)));
+                    PackItem(new CookedBird(Utility.Random(2, 5)));
+                    PackItem(new Ham(Utility.Random(1, 3)));
+                    PackItem(new RoastPig(Utility.Random(1, 2)));
+                    
+                    // Potions
+                    PackItem(new HealPotion());
+                    PackItem(new CurePotion());
+                    if (Utility.RandomBool())
+                        PackItem(new AgilityPotion());
+                    if (Utility.RandomBool())
+                        PackItem(new StrengthPotion());
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Grandmaster:
+                    // Premium supplies
+                    PackItem(new Bandage(Utility.Random(50, 100)));
+                    PackItem(new Apple(Utility.Random(10, 20)));
+                    PackItem(new BreadLoaf(Utility.Random(5, 10)));
+                    PackItem(new CheeseWheel(Utility.Random(3, 7)));
+                    PackItem(new CookedBird(Utility.Random(3, 7)));
+                    PackItem(new Ham(Utility.Random(2, 5)));
+                    PackItem(new RoastPig(Utility.Random(2, 4)));
+                    PackItem(new Sausage(Utility.Random(1, 3)));
+                    
+                    // Premium potions
+                    PackItem(new GreaterHealPotion());
+                    PackItem(new GreaterCurePotion());
+                    PackItem(new GreaterAgilityPotion());
+                    PackItem(new GreaterStrengthPotion());
+                    if (Utility.RandomBool())
+                        PackItem(new RefreshPotion());
+                    if (Utility.RandomBool())
+                        PackItem(new LesserPoisonPotion());
+                    break;
+            }
+            
+            // Persona-based additional items
+            switch (m_Persona.Profile)
+            {
+                case PlayerBotPersona.PlayerBotProfile.PlayerKiller:
+                    // PKs carry more combat-oriented supplies
+                    PackItem(new Bandage(Utility.Random(10, 25)));
+                    if (m_Persona.Experience >= PlayerBotPersona.PlayerBotExperience.Proficient)
+                    {
+                        PackItem(new GreaterHealPotion());
+                        PackItem(new GreaterCurePotion());
+                        if (Utility.RandomBool())
+                            PackItem(new GreaterAgilityPotion());
+                    }
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotProfile.Crafter:
+                    // Crafters carry more food and basic supplies
+                    PackItem(new Apple(Utility.Random(5, 10)));
+                    PackItem(new BreadLoaf(Utility.Random(3, 6)));
+                    PackItem(new CheeseWheel(Utility.Random(2, 4)));
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotProfile.Adventurer:
+                    // Adventurers carry balanced supplies
+                    PackItem(new Bandage(Utility.Random(15, 30)));
+                    PackItem(new CookedBird(Utility.Random(2, 5)));
+                    PackItem(new Ham(Utility.Random(1, 3)));
+                    if (m_Persona.Experience >= PlayerBotPersona.PlayerBotExperience.Average)
+                    {
+                        PackItem(new HealPotion());
+                        PackItem(new CurePotion());
+                    }
+                    break;
+            }
         }
 
         private void InitHair()
