@@ -48,6 +48,7 @@ namespace Server.Mobiles
             InitPersona();
             InitBody();
             InitStats();
+            InitSkills();
             InitCombatSkills();
             InitOutfit();
             InitConsumables();
@@ -239,6 +240,282 @@ namespace Server.Mobiles
 
             SetHits(Str);
 
+        }
+
+        private void InitSkills()
+        {
+            // Initialize all skills based on profile and experience
+            switch (m_Persona.Profile)
+            {
+                case PlayerBotPersona.PlayerBotProfile.PlayerKiller:
+                    InitPlayerKillerSkills();
+                    break;
+                case PlayerBotPersona.PlayerBotProfile.Crafter:
+                    InitCrafterSkills();
+                    break;
+                case PlayerBotPersona.PlayerBotProfile.Adventurer:
+                    InitAdventurerSkills();
+                    break;
+            }
+        }
+
+        private void InitPlayerKillerSkills()
+        {
+            // Player killers focus on combat and stealth skills
+            switch (m_Persona.Experience)
+            {
+                case PlayerBotPersona.PlayerBotExperience.Newbie:
+                    SetSkill(SkillName.Hiding, 20, 40);
+                    SetSkill(SkillName.Stealth, 15, 35);
+                    SetSkill(SkillName.Tracking, 10, 30);
+                    SetSkill(SkillName.DetectHidden, 15, 35);
+                    SetSkill(SkillName.Snooping, 10, 25);
+                    SetSkill(SkillName.Stealing, 20, 40);
+                    SetSkill(SkillName.Lockpicking, 15, 35);
+                    SetSkill(SkillName.RemoveTrap, 10, 25);
+                    SetSkill(SkillName.Cartography, 5, 20);
+                    SetSkill(SkillName.Camping, 10, 25);
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Average:
+                    SetSkill(SkillName.Hiding, 40, 60);
+                    SetSkill(SkillName.Stealth, 35, 55);
+                    SetSkill(SkillName.Tracking, 30, 50);
+                    SetSkill(SkillName.DetectHidden, 35, 55);
+                    SetSkill(SkillName.Snooping, 25, 45);
+                    SetSkill(SkillName.Stealing, 40, 60);
+                    SetSkill(SkillName.Lockpicking, 35, 55);
+                    SetSkill(SkillName.RemoveTrap, 25, 45);
+                    SetSkill(SkillName.Cartography, 20, 40);
+                    SetSkill(SkillName.Camping, 25, 45);
+                    SetSkill(SkillName.Anatomy, 30, 50);
+                    SetSkill(SkillName.Healing, 25, 45);
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Proficient:
+                    SetSkill(SkillName.Hiding, 60, 80);
+                    SetSkill(SkillName.Stealth, 55, 75);
+                    SetSkill(SkillName.Tracking, 50, 70);
+                    SetSkill(SkillName.DetectHidden, 55, 75);
+                    SetSkill(SkillName.Snooping, 45, 65);
+                    SetSkill(SkillName.Stealing, 60, 80);
+                    SetSkill(SkillName.Lockpicking, 55, 75);
+                    SetSkill(SkillName.RemoveTrap, 45, 65);
+                    SetSkill(SkillName.Cartography, 40, 60);
+                    SetSkill(SkillName.Camping, 45, 65);
+                    SetSkill(SkillName.Anatomy, 50, 70);
+                    SetSkill(SkillName.Healing, 45, 65);
+                    SetSkill(SkillName.AnimalLore, 30, 50);
+                    SetSkill(SkillName.Veterinary, 25, 45);
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Grandmaster:
+                    SetSkill(SkillName.Hiding, 80, 100);
+                    SetSkill(SkillName.Stealth, 75, 95);
+                    SetSkill(SkillName.Tracking, 70, 90);
+                    SetSkill(SkillName.DetectHidden, 75, 95);
+                    SetSkill(SkillName.Snooping, 65, 85);
+                    SetSkill(SkillName.Stealing, 80, 100);
+                    SetSkill(SkillName.Lockpicking, 75, 95);
+                    SetSkill(SkillName.RemoveTrap, 65, 85);
+                    SetSkill(SkillName.Cartography, 60, 80);
+                    SetSkill(SkillName.Camping, 65, 85);
+                    SetSkill(SkillName.Anatomy, 70, 90);
+                    SetSkill(SkillName.Healing, 65, 85);
+                    SetSkill(SkillName.AnimalLore, 50, 70);
+                    SetSkill(SkillName.Veterinary, 45, 65);
+                    SetSkill(SkillName.ArmsLore, 60, 80);
+                    SetSkill(SkillName.ItemID, 55, 75);
+                    break;
+            }
+        }
+
+        private void InitCrafterSkills()
+        {
+            // Crafters focus on crafting and utility skills
+            var craftingSkills = new List<SkillName>()
+            {
+                SkillName.Alchemy, SkillName.Blacksmith, SkillName.Carpentry,
+                SkillName.Cartography, SkillName.Cooking, SkillName.Fletching,
+                SkillName.Inscribe, SkillName.Lumberjacking, SkillName.Mining,
+                SkillName.Tailoring, SkillName.Tinkering
+            };
+            
+            // Select 2-3 primary crafting skills
+            int primaryCount = Utility.RandomMinMax(2, 3);
+            var primarySkills = new List<SkillName>();
+            
+            for (int i = 0; i < primaryCount; i++)
+            {
+                int idx = Utility.Random(craftingSkills.Count);
+                primarySkills.Add(craftingSkills[idx]);
+                craftingSkills.RemoveAt(idx);
+            }
+            
+            // Set primary crafting skills based on experience
+            foreach (SkillName skill in primarySkills)
+            {
+                switch (m_Persona.Experience)
+                {
+                    case PlayerBotPersona.PlayerBotExperience.Newbie:
+                        SetSkill(skill, 20, 40);
+                        break;
+                    case PlayerBotPersona.PlayerBotExperience.Average:
+                        SetSkill(skill, 40, 60);
+                        break;
+                    case PlayerBotPersona.PlayerBotExperience.Proficient:
+                        SetSkill(skill, 60, 80);
+                        break;
+                    case PlayerBotPersona.PlayerBotExperience.Grandmaster:
+                        SetSkill(skill, 80, 100);
+                        break;
+                }
+            }
+            
+            // Set secondary skills (lower levels)
+            foreach (SkillName skill in craftingSkills)
+            {
+                if (Utility.RandomBool()) // 50% chance to have secondary skills
+                {
+                    switch (m_Persona.Experience)
+                    {
+                        case PlayerBotPersona.PlayerBotExperience.Newbie:
+                            SetSkill(skill, 5, 20);
+                            break;
+                        case PlayerBotPersona.PlayerBotExperience.Average:
+                            SetSkill(skill, 15, 35);
+                            break;
+                        case PlayerBotPersona.PlayerBotExperience.Proficient:
+                            SetSkill(skill, 25, 45);
+                            break;
+                        case PlayerBotPersona.PlayerBotExperience.Grandmaster:
+                            SetSkill(skill, 35, 55);
+                            break;
+                    }
+                }
+            }
+            
+            // Add utility skills for crafters
+            switch (m_Persona.Experience)
+            {
+                case PlayerBotPersona.PlayerBotExperience.Newbie:
+                    SetSkill(SkillName.ItemID, 10, 30);
+                    SetSkill(SkillName.ArmsLore, 10, 30);
+                    SetSkill(SkillName.TasteID, 5, 20);
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Average:
+                    SetSkill(SkillName.ItemID, 30, 50);
+                    SetSkill(SkillName.ArmsLore, 30, 50);
+                    SetSkill(SkillName.TasteID, 20, 40);
+                    SetSkill(SkillName.EvalInt, 25, 45);
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Proficient:
+                    SetSkill(SkillName.ItemID, 50, 70);
+                    SetSkill(SkillName.ArmsLore, 50, 70);
+                    SetSkill(SkillName.TasteID, 40, 60);
+                    SetSkill(SkillName.EvalInt, 45, 65);
+                    SetSkill(SkillName.Magery, 20, 40);
+                    SetSkill(SkillName.Meditation, 15, 35);
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Grandmaster:
+                    SetSkill(SkillName.ItemID, 70, 90);
+                    SetSkill(SkillName.ArmsLore, 70, 90);
+                    SetSkill(SkillName.TasteID, 60, 80);
+                    SetSkill(SkillName.EvalInt, 65, 85);
+                    SetSkill(SkillName.Magery, 40, 60);
+                    SetSkill(SkillName.Meditation, 35, 55);
+                    SetSkill(SkillName.MagicResist, 30, 50);
+                    break;
+            }
+        }
+
+        private void InitAdventurerSkills()
+        {
+            // Adventurers have a balanced mix of skills
+            switch (m_Persona.Experience)
+            {
+                case PlayerBotPersona.PlayerBotExperience.Newbie:
+                    // Basic survival and exploration skills
+                    SetSkill(SkillName.Camping, 15, 35);
+                    SetSkill(SkillName.Cartography, 10, 30);
+                    SetSkill(SkillName.Cooking, 10, 25);
+                    SetSkill(SkillName.Fishing, 10, 30);
+                    SetSkill(SkillName.Healing, 15, 35);
+                    SetSkill(SkillName.Anatomy, 10, 30);
+                    SetSkill(SkillName.AnimalLore, 10, 25);
+                    SetSkill(SkillName.Tracking, 10, 30);
+                    SetSkill(SkillName.DetectHidden, 5, 20);
+                    SetSkill(SkillName.ItemID, 10, 25);
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Average:
+                    // More comprehensive skill set
+                    SetSkill(SkillName.Camping, 35, 55);
+                    SetSkill(SkillName.Cartography, 30, 50);
+                    SetSkill(SkillName.Cooking, 25, 45);
+                    SetSkill(SkillName.Fishing, 30, 50);
+                    SetSkill(SkillName.Healing, 35, 55);
+                    SetSkill(SkillName.Anatomy, 30, 50);
+                    SetSkill(SkillName.AnimalLore, 25, 45);
+                    SetSkill(SkillName.Tracking, 30, 50);
+                    SetSkill(SkillName.DetectHidden, 20, 40);
+                    SetSkill(SkillName.ItemID, 25, 45);
+                    SetSkill(SkillName.ArmsLore, 20, 40);
+                    SetSkill(SkillName.Veterinary, 15, 35);
+                    SetSkill(SkillName.Herding, 10, 30);
+                    SetSkill(SkillName.AnimalTaming, 10, 25);
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Proficient:
+                    // Advanced adventuring skills
+                    SetSkill(SkillName.Camping, 55, 75);
+                    SetSkill(SkillName.Cartography, 50, 70);
+                    SetSkill(SkillName.Cooking, 45, 65);
+                    SetSkill(SkillName.Fishing, 50, 70);
+                    SetSkill(SkillName.Healing, 55, 75);
+                    SetSkill(SkillName.Anatomy, 50, 70);
+                    SetSkill(SkillName.AnimalLore, 45, 65);
+                    SetSkill(SkillName.Tracking, 50, 70);
+                    SetSkill(SkillName.DetectHidden, 40, 60);
+                    SetSkill(SkillName.ItemID, 45, 65);
+                    SetSkill(SkillName.ArmsLore, 40, 60);
+                    SetSkill(SkillName.Veterinary, 35, 55);
+                    SetSkill(SkillName.Herding, 30, 50);
+                    SetSkill(SkillName.AnimalTaming, 25, 45);
+                    SetSkill(SkillName.Magery, 20, 40);
+                    SetSkill(SkillName.Meditation, 15, 35);
+                    SetSkill(SkillName.EvalInt, 20, 40);
+                    SetSkill(SkillName.TasteID, 15, 35);
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Grandmaster:
+                    // Master adventurer with diverse skills
+                    SetSkill(SkillName.Camping, 75, 95);
+                    SetSkill(SkillName.Cartography, 70, 90);
+                    SetSkill(SkillName.Cooking, 65, 85);
+                    SetSkill(SkillName.Fishing, 70, 90);
+                    SetSkill(SkillName.Healing, 75, 95);
+                    SetSkill(SkillName.Anatomy, 70, 90);
+                    SetSkill(SkillName.AnimalLore, 65, 85);
+                    SetSkill(SkillName.Tracking, 70, 90);
+                    SetSkill(SkillName.DetectHidden, 60, 80);
+                    SetSkill(SkillName.ItemID, 65, 85);
+                    SetSkill(SkillName.ArmsLore, 60, 80);
+                    SetSkill(SkillName.Veterinary, 55, 75);
+                    SetSkill(SkillName.Herding, 50, 70);
+                    SetSkill(SkillName.AnimalTaming, 45, 65);
+                    SetSkill(SkillName.Magery, 40, 60);
+                    SetSkill(SkillName.Meditation, 35, 55);
+                    SetSkill(SkillName.EvalInt, 40, 60);
+                    SetSkill(SkillName.TasteID, 35, 55);
+                    SetSkill(SkillName.MagicResist, 30, 50);
+                    SetSkill(SkillName.Lockpicking, 25, 45);
+                    SetSkill(SkillName.RemoveTrap, 20, 40);
+                    break;
+            }
         }
 
         private void InitCombatSkills()
