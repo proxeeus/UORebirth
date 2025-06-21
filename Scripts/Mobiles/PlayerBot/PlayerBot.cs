@@ -969,6 +969,19 @@ namespace Server.Mobiles
             PackItem(new Apple(Utility.Random(3, 8)));
             PackItem(new BreadLoaf(Utility.Random(2, 5)));
             
+            // Add basic reagents for magic casting
+            if (Skills[SkillName.Magery].Base > 0)
+            {
+                PackItem(new BlackPearl(Utility.Random(10, 30)));
+                PackItem(new Bloodmoss(Utility.Random(10, 30)));
+                PackItem(new Garlic(Utility.Random(10, 30)));
+                PackItem(new Ginseng(Utility.Random(10, 30)));
+                PackItem(new MandrakeRoot(Utility.Random(10, 30)));
+                PackItem(new Nightshade(Utility.Random(10, 30)));
+                PackItem(new SulfurousAsh(Utility.Random(10, 30)));
+                PackItem(new SpidersSilk(Utility.Random(10, 30)));
+            }
+            
             // Experience-based consumables
             switch (m_Persona.Experience)
             {
