@@ -52,6 +52,9 @@ namespace Server.Mobiles
 				}
 			}*/
 
+            // Handle combat speech and emotes
+            HandleCombatSpeech(combatant);
+
             // Check if we should cast a spell
             if (ShouldCastSpell(combatant))
             {
@@ -1365,5 +1368,305 @@ namespace Server.Mobiles
         }
 
         public static int[] m_ManaTable = new int[]{ 4, 6, 9, 11, 14, 20, 40, 50 };
+
+        private void HandleCombatSpeech(Mobile target)
+        {
+            PlayerBot playerBot = m_Mobile as PlayerBot;
+            if (playerBot == null)
+                return;
+
+            // Don't spam speech - only talk occasionally
+            if (Utility.RandomDouble() > 0.05) // Reduced from 15% to 5% chance per combat tick
+                return;
+
+            // Check if we're too far to be heard
+            if (m_Mobile.GetDistanceToSqrt(target) > 8)
+                return;
+
+            // Add additional cooldown - don't speak too frequently
+            if (m_Mobile.LastSpeechTime > DateTime.Now.AddSeconds(-8)) // 8 second cooldown between speeches
+                return;
+
+            // Determine what type of speech to make based on situation
+            double healthPercentage = (double)m_Mobile.Hits / m_Mobile.HitsMax;
+            double targetHealthPercentage = (double)target.Hits / target.HitsMax;
+            bool isWinning = healthPercentage > targetHealthPercentage;
+            bool isLosing = healthPercentage < targetHealthPercentage * 0.7;
+
+            // Choose speech type based on situation
+            if (isLosing && Utility.RandomDouble() < 0.4)
+            {
+                // 40% chance to taunt when losing
+                SayCombatTaunt(target, playerBot);
+            }
+            else if (isWinning && Utility.RandomDouble() < 0.3)
+            {
+                // 30% chance to boast when winning
+                SayVictoryBoast(target, playerBot);
+            }
+            else if (Utility.RandomDouble() < 0.25)
+            {
+                // 25% chance for general battle cry
+                SayBattleCry(playerBot);
+            }
+            else if (Utility.RandomDouble() < 0.2)
+            {
+                // 20% chance for contextual emote
+                PerformCombatEmote(target, playerBot);
+            }
+
+            // Update last speech time
+            m_Mobile.LastSpeechTime = DateTime.Now;
+        }
+
+        private void SayCombatTaunt(Mobile target, PlayerBot playerBot)
+        {
+            string[] taunts = GetTauntsForProfile(playerBot.PlayerBotProfile);
+            if (taunts.Length > 0)
+            {
+                string taunt = taunts[Utility.Random(taunts.Length)];
+                taunt = taunt.Replace("{target}", target.Name);
+                taunt = taunt.Replace("{self}", playerBot.Name);
+                
+                playerBot.Say(taunt);
+            }
+        }
+
+        private void SayVictoryBoast(Mobile target, PlayerBot playerBot)
+        {
+            string[] boasts = GetBoastsForProfile(playerBot.PlayerBotProfile);
+            if (boasts.Length > 0)
+            {
+                string boast = boasts[Utility.Random(boasts.Length)];
+                boast = boast.Replace("{target}", target.Name);
+                boast = boast.Replace("{self}", playerBot.Name);
+                
+                playerBot.Say(boast);
+            }
+        }
+
+        private void SayBattleCry(PlayerBot playerBot)
+        {
+            string[] battleCries = GetBattleCriesForProfile(playerBot.PlayerBotProfile);
+            if (battleCries.Length > 0)
+            {
+                string battleCry = battleCries[Utility.Random(battleCries.Length)];
+                battleCry = battleCry.Replace("{self}", playerBot.Name);
+                
+                playerBot.Say(battleCry);
+            }
+        }
+
+        private void PerformCombatEmote(Mobile target, PlayerBot playerBot)
+        {
+            double healthPercentage = (double)playerBot.Hits / playerBot.HitsMax;
+            
+            if (healthPercentage < 0.3)
+            {
+                // Low health - desperate emotes
+                string[] desperateEmotes = {
+                    "*clutches wounds*",
+                    "*staggers from pain*",
+                    "*grits teeth in determination*",
+                    "*wipes blood from face*"
+                };
+                playerBot.Emote(desperateEmotes[Utility.Random(desperateEmotes.Length)]);
+            }
+            else if (healthPercentage > 0.8)
+            {
+                // High health - confident emotes
+                string[] confidentEmotes = {
+                    "*cracks knuckles*",
+                    "*adjusts stance*",
+                    "*smirks confidently*",
+                    "*rolls shoulders*"
+                };
+                playerBot.Emote(confidentEmotes[Utility.Random(confidentEmotes.Length)]);
+            }
+            else
+            {
+                // Medium health - focused emotes
+                string[] focusedEmotes = {
+                    "*focuses on {target}*",
+                    "*circles warily*",
+                    "*maintains guard*",
+                    "*studies opponent*"
+                };
+                string emote = focusedEmotes[Utility.Random(focusedEmotes.Length)];
+                emote = emote.Replace("{target}", target.Name);
+                playerBot.Emote(emote);
+            }
+        }
+
+        private string[] GetTauntsForProfile(PlayerBotPersona.PlayerBotProfile profile)
+        {
+            switch (profile)
+            {
+                case PlayerBotPersona.PlayerBotProfile.PlayerKiller:
+                    return new string[] {
+                        "You're just another victim, {target}!",
+                        "Your death will be swift, {target}!",
+                        "I've killed better than you!",
+                        "You're not worth the effort, {target}!",
+                        "Another fool to add to my collection!",
+                        "Your screams will be music to my ears!",
+                        "Die like the weakling you are!",
+                        "I'll make this quick... for me!",
+                        "You picked the wrong fight, {target}!",
+                        "Your blood will stain the ground!"
+                    };
+                    
+                case PlayerBotPersona.PlayerBotProfile.Adventurer:
+                    return new string[] {
+                        "You're no match for my skills, {target}!",
+                        "I've faced worse than you!",
+                        "Your technique is sloppy!",
+                        "Is that the best you can do?",
+                        "I expected more of a challenge!",
+                        "You fight like a novice!",
+                        "My training will be your undoing!",
+                        "You're outclassed, {target}!",
+                        "This will be over quickly!",
+                        "You should have stayed home!"
+                    };
+                    
+                case PlayerBotPersona.PlayerBotProfile.Crafter:
+                    return new string[] {
+                        "I may be a crafter, but I can fight!",
+                        "Don't underestimate a skilled worker!",
+                        "My hands are strong from years of crafting!",
+                        "You think crafters can't fight?",
+                        "I've built things tougher than you!",
+                        "My tools can be weapons too!",
+                        "You'll regret attacking a crafter!",
+                        "I work with my hands every day!",
+                        "This is what happens when you mess with a crafter!",
+                        "My craft has made me strong!"
+                    };
+                    
+                default:
+                    return new string[] {
+                        "You're going down, {target}!",
+                        "This is your last mistake!",
+                        "You picked the wrong opponent!",
+                        "I'll show you what I'm made of!",
+                        "You're not ready for this fight!"
+                    };
+            }
+        }
+
+        private string[] GetBoastsForProfile(PlayerBotPersona.PlayerBotProfile profile)
+        {
+            switch (profile)
+            {
+                case PlayerBotPersona.PlayerBotProfile.PlayerKiller:
+                    return new string[] {
+                        "Another kill to my name!",
+                        "You were too weak to survive!",
+                        "Death comes for all who oppose me!",
+                        "Your life ends here, {target}!",
+                        "I am the reaper of souls!",
+                        "Your death feeds my power!",
+                        "Another victim falls before me!",
+                        "You should have run when you had the chance!",
+                        "I am unstoppable!",
+                        "Your blood strengthens me!"
+                    };
+                    
+                case PlayerBotPersona.PlayerBotProfile.Adventurer:
+                    return new string[] {
+                        "My experience shows, {target}!",
+                        "Years of training pay off!",
+                        "You can't match my skills!",
+                        "I've survived worse than you!",
+                        "My adventures have made me strong!",
+                        "You're no match for a true adventurer!",
+                        "I've seen things that would break you!",
+                        "My journey has prepared me for this!",
+                        "You fight like an amateur!",
+                        "Experience always wins!"
+                    };
+                    
+                case PlayerBotPersona.PlayerBotProfile.Crafter:
+                    return new string[] {
+                        "Crafters are tougher than you think!",
+                        "My work has made me strong!",
+                        "You underestimated a crafter!",
+                        "I build and I destroy!",
+                        "My hands are my weapons!",
+                        "Crafting builds character and strength!",
+                        "You thought crafters were weak?",
+                        "My trade has taught me discipline!",
+                        "I create and I can destroy!",
+                        "Crafters are not to be trifled with!"
+                    };
+                    
+                default:
+                    return new string[] {
+                        "I am victorious!",
+                        "You were no match for me!",
+                        "My strength prevails!",
+                        "I am the better fighter!",
+                        "Victory is mine!"
+                    };
+            }
+        }
+
+        private string[] GetBattleCriesForProfile(PlayerBotPersona.PlayerBotProfile profile)
+        {
+            switch (profile)
+            {
+                case PlayerBotPersona.PlayerBotProfile.PlayerKiller:
+                    return new string[] {
+                        "Death to all who oppose me!",
+                        "Blood will flow!",
+                        "I am the bringer of death!",
+                        "Your souls are mine!",
+                        "Fear my wrath!",
+                        "I am the nightmare!",
+                        "Death is my ally!",
+                        "I am unstoppable!",
+                        "Your doom approaches!",
+                        "I am the darkness!"
+                    };
+                    
+                case PlayerBotPersona.PlayerBotProfile.Adventurer:
+                    return new string[] {
+                        "For glory and adventure!",
+                        "My blade serves justice!",
+                        "I fight for honor!",
+                        "Adventure calls!",
+                        "My skills will prevail!",
+                        "For the thrill of battle!",
+                        "I am a warrior!",
+                        "My experience guides me!",
+                        "I fight for what's right!",
+                        "Adventure never ends!"
+                    };
+                    
+                case PlayerBotPersona.PlayerBotProfile.Crafter:
+                    return new string[] {
+                        "My craft is my strength!",
+                        "I build and I fight!",
+                        "My hands are my weapons!",
+                        "Crafters are not weak!",
+                        "I work and I fight!",
+                        "My trade has made me strong!",
+                        "I create and I destroy!",
+                        "Crafters have pride too!",
+                        "My skills serve me well!",
+                        "I am a worker and a warrior!"
+                    };
+                    
+                default:
+                    return new string[] {
+                        "For honor!",
+                        "I will not fall!",
+                        "My strength is my weapon!",
+                        "I fight for what I believe!",
+                        "Victory or death!"
+                    };
+            }
+        }
     }
 }
