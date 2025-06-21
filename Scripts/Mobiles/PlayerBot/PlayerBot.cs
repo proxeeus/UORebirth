@@ -1341,8 +1341,8 @@ namespace Server.Mobiles
             ConsumesReagents = true;
             ConsumesAmmo = true;
 
-            // Help PlayerBots regenerate mana more effectively
-            if (Alive && !Paralyzed && !Frozen)
+            // Help PlayerBots regenerate mana more effectively, but only when out of combat.
+            if (this.Combatant == null && Alive && !Paralyzed && !Frozen)
             {
                 double meditationSkill = Skills[SkillName.Meditation].Base;
                 

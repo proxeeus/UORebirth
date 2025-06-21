@@ -55,6 +55,33 @@ namespace Server.Mobiles
             bool isDispel = (targ is Server.Spells.Sixth.DispelSpell.InternalTarget);
             bool isParalyze = (targ is Server.Spells.Fifth.ParalyzeSpell.InternalTarget);
 
+            // Check for summon spells by checking the target type name and flags
+            string targTypeName = targ.GetType().Name;
+            string targNamespace = targ.GetType().Namespace ?? "";
+            bool isSummonSpell = 
+                (targTypeName == "InternalTarget" && 
+                 (targNamespace.Contains("BladeSpirits") || 
+                  targNamespace.Contains("EnergyVortex") || 
+                  targNamespace.Contains("SummonDaemon"))) ||
+                (targ.Flags == TargetFlags.None && targ.AllowGround && targ.Range == 12);
+
+            // If it's a summon spell, target the combatant directly (this will summon at their location)
+            if (isSummonSpell)
+            {
+                Mobile summonTarget = m_Mobile.Combatant;
+                if (summonTarget != null && m_Mobile.InRange(summonTarget, targ.Range) && m_Mobile.CanSee(summonTarget) && m_Mobile.InLOS(summonTarget))
+                {
+                    m_Mobile.DebugSay("Invoking summon spell on {0}", summonTarget.Name);
+                    targ.Invoke(m_Mobile, summonTarget);
+                }
+                else
+                {
+                    m_Mobile.DebugSay("Canceling summon spell, target is out of range or not visible.");
+                    targ.Cancel(m_Mobile, TargetCancelType.Canceled);
+                }
+                return;
+            }
+
             Mobile toTarget;
 
             if (isDispel)
@@ -1291,10 +1318,11 @@ namespace Server.Mobiles
                     {
                         if (playerBot.Body.IsHuman)
                         {
-                            switch (Utility.Random(2))
+                            switch (Utility.Random(3))
                             {
                                 case 0: selectedSpell = new Server.Spells.Fifth.ParalyzeSpell(playerBot, null); break;
-                                default: selectedSpell = new Server.Spells.Fifth.MindBlastSpell(playerBot, null); break;
+                                case 1: selectedSpell = new Server.Spells.Fifth.MindBlastSpell(playerBot, null); break;
+                                default: selectedSpell = new Server.Spells.Fifth.BladeSpiritsSpell(playerBot, null); break;
                             }
                         }
                         else
@@ -1316,7 +1344,14 @@ namespace Server.Mobiles
 
                 case 7:
                 case 8:
-                    selectedSpell = new Server.Spells.Seventh.FlameStrikeSpell(playerBot, null);
+                    {
+                        switch (Utility.Random(3))
+                        {
+                            case 0: selectedSpell = new Server.Spells.Seventh.FlameStrikeSpell(playerBot, null); break;
+                            case 1: selectedSpell = new Server.Spells.Eighth.EnergyVortexSpell(playerBot, null); break;
+                            default: selectedSpell = new Server.Spells.Eighth.SummonDaemonSpell(playerBot, null); break;
+                        }
+                    }
                     break;
             }
 
