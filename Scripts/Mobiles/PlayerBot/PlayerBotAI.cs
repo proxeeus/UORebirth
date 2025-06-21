@@ -3,13 +3,236 @@ using System.Collections.Generic;
 using System.Text;
 using Server;
 using Server.Spells;
+using Server.Items;
+using Server.Targeting;
+using Server.Misc;
 
 namespace Server.Mobiles
 {
     public class PlayerBotAI : BaseAI
     {
+        private DateTime m_NextCastTime;
+        private Item m_SavedOneHand;
+        private Item m_SavedTwoHand;
+
         public PlayerBotAI(BaseCreature m) : base(m)
         {
+        }
+
+        public override bool Think()
+        {
+            if (m_Mobile.Deleted)
+                return false;
+
+            Target targ = m_Mobile.Target;
+
+            if (targ != null)
+            {
+                ProcessTarget(targ);
+                return true;
+            }
+            else
+            {
+                return base.Think();
+            }
+        }
+
+        public virtual bool SmartAI
+        {
+            get { return (m_Mobile.Body.IsHuman || m_Mobile is BaseVendor || m_Mobile is BaseEscortable); }
+        }
+
+        public void RunFrom(Mobile m)
+        {
+            if (!MoveTo(m, true, m_Mobile.RangeFight))
+                OnFailedMove();
+        }
+
+        private void ProcessTarget(Target targ)
+        {
+            bool isDispel = (targ is Server.Spells.Sixth.DispelSpell.InternalTarget);
+            bool isParalyze = (targ is Server.Spells.Fifth.ParalyzeSpell.InternalTarget);
+
+            Mobile toTarget;
+
+            if (isDispel)
+            {
+                toTarget = FindDispelTarget(false);
+
+                if (!SmartAI && toTarget != null)
+                    RunTo(toTarget);
+                else if (toTarget != null && m_Mobile.InRange(toTarget, 8))
+                    RunFrom(toTarget);
+            }
+            else if (SmartAI && isParalyze)
+            {
+                toTarget = FindDispelTarget(true);
+
+                if (toTarget == null)
+                {
+                    toTarget = m_Mobile.Combatant;
+
+                    if (toTarget != null)
+                        RunTo(toTarget);
+                }
+            }
+            else
+            {
+                toTarget = m_Mobile.Combatant;
+
+                if (toTarget != null)
+                    RunTo(toTarget);
+            }
+
+            if ((targ.Flags & TargetFlags.Harmful) != 0 && toTarget != null)
+            {
+                if ((targ.Range == -1 || m_Mobile.InRange(toTarget, targ.Range)) && m_Mobile.CanSee(toTarget) && m_Mobile.InLOS(toTarget))
+                {
+                    targ.Invoke(m_Mobile, toTarget);
+                }
+                else if (isDispel)
+                {
+                    targ.Cancel(m_Mobile, TargetCancelType.Canceled);
+                }
+            }
+            else if ((targ.Flags & TargetFlags.Beneficial) != 0)
+            {
+                targ.Invoke(m_Mobile, m_Mobile);
+            }
+            else
+            {
+                targ.Cancel(m_Mobile, TargetCancelType.Canceled);
+            }
+        }
+
+        private Mobile FindDispelTarget(bool activeOnly)
+        {
+            if (m_Mobile.Deleted || m_Mobile.Int < 91)
+                return null;
+
+            if (activeOnly)
+            {
+                List<AggressorInfo> aggressed = m_Mobile.Aggressed;
+                List<AggressorInfo> aggressors = m_Mobile.Aggressors;
+
+                Mobile active = null;
+                double activePrio = 0.0;
+
+                Mobile comb = m_Mobile.Combatant;
+
+                if (comb != null && !comb.Deleted && m_Mobile.InRange(comb, 12) && CanDispel(comb))
+                {
+                    active = comb;
+                    activePrio = m_Mobile.GetDistanceToSqrt(comb);
+
+                    if (activePrio <= 2)
+                        return active;
+                }
+
+                for (int i = 0; i < aggressed.Count; ++i)
+                {
+                    AggressorInfo info = aggressed[i];
+                    Mobile m = info.Defender;
+                    if (m != comb && m.Combatant == m_Mobile && m_Mobile.InRange(m, 12) && CanDispel(m))
+                    {
+                        double prio = m_Mobile.GetDistanceToSqrt(m);
+                        if (active == null || prio < activePrio)
+                        {
+                            active = m;
+                            activePrio = prio;
+                            if (activePrio <= 2)
+                                return active;
+                        }
+                    }
+                }
+
+                for (int i = 0; i < aggressors.Count; ++i)
+                {
+                    AggressorInfo info = aggressors[i];
+                    Mobile m = info.Attacker;
+                    if (m != comb && m.Combatant == m_Mobile && m_Mobile.InRange(m, 12) && CanDispel(m))
+                    {
+                        double prio = m_Mobile.GetDistanceToSqrt(m);
+                        if (active == null || prio < activePrio)
+                        {
+                            active = m;
+                            activePrio = prio;
+                            if (activePrio <= 2)
+                                return active;
+                        }
+                    }
+                }
+
+                return active;
+            }
+            else
+            {
+                Map map = m_Mobile.Map;
+                if (map != null)
+                {
+                    Mobile active = null, inactive = null;
+                    double actPrio = 0.0, inactPrio = 0.0;
+
+                    Mobile comb = m_Mobile.Combatant;
+                    if (comb != null && !comb.Deleted && CanDispel(comb))
+                    {
+                        active = inactive = comb;
+                        actPrio = inactPrio = m_Mobile.GetDistanceToSqrt(comb);
+                    }
+
+                    foreach (Mobile m in m_Mobile.GetMobilesInRange(12))
+                    {
+                        if (m != m_Mobile && CanDispel(m))
+                        {
+                            double prio = m_Mobile.GetDistanceToSqrt(m);
+                            if (inactive == null || prio < inactPrio)
+                            {
+                                inactive = m;
+                                inactPrio = prio;
+                            }
+                            if ((m_Mobile.Combatant == m || m.Combatant == m_Mobile) && (active == null || prio < actPrio))
+                            {
+                                active = m;
+                                actPrio = prio;
+                            }
+                        }
+                    }
+
+                    return active ?? inactive;
+                }
+            }
+            return null;
+        }
+
+        private bool CanDispel(Mobile m)
+        {
+            if (m is BaseCreature)
+            {
+                BaseCreature bc = (BaseCreature)m;
+                return bc.Summoned && m_Mobile.CanBeHarmful(m, false) && !bc.IsAnimatedDead;
+            }
+
+            return false;
+        }
+
+        public void RunTo(Mobile m)
+        {
+            if (!MoveTo(m, true, m_Mobile.RangeFight))
+                OnFailedMove();
+        }
+
+        public void OnFailedMove()
+        {
+            if (AquireFocusMob(m_Mobile.RangePerception, m_Mobile.FightMode, false, false, true))
+            {
+                m_Mobile.DebugSay("My move is blocked, so I am going to attack {0}", m_Mobile.FocusMob.Name);
+                m_Mobile.Combatant = m_Mobile.FocusMob;
+                Action = ActionType.Combat;
+            }
+            else
+            {
+                m_Mobile.DebugSay("I am stuck");
+            }
         }
 
         public override bool DoActionWander()
@@ -37,84 +260,94 @@ namespace Server.Mobiles
             if (combatant == null || combatant.Deleted || combatant.Map != m_Mobile.Map || !combatant.Alive)
             {
                 m_Mobile.DebugSay("My combatant is gone, so my guard is up");
-
-                Action = ActionType.Wander;//.Guard;
-
+                Action = ActionType.Wander;
                 return true;
             }
-
-            /*if ( !m_Mobile.InLOS( combatant ) )
-			{
-				if ( AquireFocusMob( m_Mobile.RangePerception, m_Mobile.FightMode, false, false, true ) )
-				{
-					m_Mobile.Combatant = combatant = m_Mobile.FocusMob;
-					m_Mobile.FocusMob = null;
-				}
-			}*/
 
             // Handle combat speech and emotes
             HandleCombatSpeech(combatant);
 
-            // Check if we should cast a spell
-            if (ShouldCastSpell(combatant))
-            {
-                if (CastCombatSpell(combatant))
-                {
-                    return true; // Spell was cast, continue next tick
-                }
-            }
-
-            if (MoveTo(combatant, true, m_Mobile.RangeFight))
-            {
-                if (Utility.RandomDouble() <= 0.25 || !m_Mobile.InRange(combatant, m_Mobile.RangeFight))
-                    m_Mobile.Direction = m_Mobile.GetDirectionTo(combatant);
-            }
-            else if (AquireFocusMob(m_Mobile.RangePerception, m_Mobile.FightMode, false, false, true))
-            {
-                m_Mobile.DebugSay("My move is blocked, so I am going to attack {0}", m_Mobile.FocusMob.Name);
-
-                m_Mobile.Combatant = m_Mobile.FocusMob;
-                Action = ActionType.Combat;
-
-                return true;
-            }
-            else if (m_Mobile.GetDistanceToSqrt(combatant) > m_Mobile.RangePerception + 1)
-            {
-                m_Mobile.DebugSay("I cannot find {0}, so my guard is up", combatant.Name);
-
-                Action = ActionType.Wander;
-
-                return true;
-            }
-            else
-            {
-                m_Mobile.DebugSay("I should be closer to {0}", combatant.Name);
-            }
-
+            // Check if we should flee
             if (m_Mobile.CheckFlee())
             {
-                // We are low on health, should we flee?
-
                 bool flee = false;
 
                 if (m_Mobile.Hits < combatant.Hits)
                 {
-                    // We are more hurt than them
-
                     int diff = combatant.Hits - m_Mobile.Hits;
-
-                    flee = (Utility.Random(0, 100) < (10 + diff)); // (10 + diff)% chance to flee
+                    flee = (Utility.Random(0, 100) < (10 + diff));
                 }
                 else
                 {
-                    flee = Utility.Random(0, 100) < 10; // 10% chance to flee
+                    flee = Utility.Random(0, 100) < 10;
                 }
 
                 if (flee)
                 {
                     m_Mobile.DebugSay("I am going to flee from {0}", combatant.Name);
                     Action = ActionType.Flee;
+                    return true;
                 }
+            }
+
+            // Handle spell casting - use proper MageAI pattern with damage entry checks
+            if (m_Mobile.Spell == null && DateTime.Now > m_NextCastTime && m_Mobile.InRange(combatant, 12) && m_Mobile.InLOS(combatant))
+            {
+                // CRITICAL: Check for damage entries before casting spells (like MageAI does)
+                DamageEntry de = m_Mobile.FindDamageEntryFor(combatant);
+                if (de == null || de.HasExpired)
+                {
+                    de = combatant.FindDamageEntryFor(m_Mobile);
+                    if ((de == null || de.HasExpired))
+                    {
+                        if (!NotorietyHandlers.CheckAggressor(m_Mobile.Aggressors, combatant) && !NotorietyHandlers.CheckAggressed(combatant.Aggressed, m_Mobile))
+                        {
+                            // We can't cast because we didn't give or take damage yet
+                            // Move to target first to initiate combat
+                            m_Mobile.DebugSay("No damage exchanged yet, moving to {0} to initiate combat", combatant.Name);
+                            RunTo(combatant);
+                            return true;
+                        }
+                    }
+                }
+
+                // Check if we can cast spells
+                PlayerBot playerBot = m_Mobile as PlayerBot;
+                if (playerBot != null && ShouldCastSpell(combatant))
+                {
+                    Spell spell = GetRandomCombatSpell(playerBot, combatant);
+
+                    if (spell != null)
+                    {
+                        playerBot.DebugSay("Attempting to cast {0} on {1}", spell.GetType().Name, combatant.Name);
+                        
+                        // Ensure our hands are free so casting succeeds
+                        EnsureHandsFree();
+                        
+                        if (spell.Cast())
+                        {
+                            // Set proper cooldown like MageAI
+                            TimeSpan delay = spell.GetCastDelay() + TimeSpan.FromSeconds(Utility.Random(2, 5));
+                            m_NextCastTime = DateTime.Now + delay;
+                            
+                            playerBot.DebugSay("SUCCESS: Casting {0} on {1}", spell.GetType().Name, combatant.Name);
+                            return true;
+                        }
+                        else
+                        {
+                            playerBot.DebugSay("FAILED: Could not cast {0} on {1}", spell.GetType().Name, combatant.Name);
+                        }
+                    }
+                    else
+                    {
+                        playerBot.DebugSay("No spell selected for casting");
+                    }
+                }
+            }
+            else if (m_Mobile.Spell == null || !m_Mobile.Spell.IsCasting)
+            {
+                // Move towards target if not casting
+                RunTo(combatant);
             }
 
             return true;
@@ -877,494 +1110,166 @@ namespace Server.Mobiles
             // Check if this is a PlayerBot with magic skills
             PlayerBot playerBot = m_Mobile as PlayerBot;
             if (playerBot == null)
+            {
+                m_Mobile.DebugSay("ShouldCastSpell: Not a PlayerBot");
                 return false;
+            }
 
             // Check if we have sufficient Magery skill
             double magerySkill = playerBot.Skills[SkillName.Magery].Base;
-            if (magerySkill < 20.0) // Minimum skill to cast spells
+            if (magerySkill < 10.0)
+            {
+                playerBot.DebugSay("ShouldCastSpell: Magery too low ({0:F1} < 10.0)", magerySkill);
                 return false;
+            }
 
             // Check if we're not already casting a spell
             if (playerBot.Spell != null && playerBot.Spell.IsCasting)
+            {
+                playerBot.DebugSay("ShouldCastSpell: Already casting a spell");
                 return false;
+            }
 
             // Check if we have enough mana
-            if (playerBot.Mana < 10) // Minimum mana requirement
+            if (playerBot.Mana < 8)
+            {
+                playerBot.DebugSay("ShouldCastSpell: Not enough mana ({0} < 8)", playerBot.Mana);
                 return false;
+            }
 
             // Check if we're not paralyzed or frozen
             if (playerBot.Paralyzed || playerBot.Frozen)
+            {
+                playerBot.DebugSay("ShouldCastSpell: Paralyzed or frozen");
                 return false;
+            }
 
-            // Determine spell casting frequency based on skill level
-            double castChance = 0.0;
+            // Simple casting chance based on skill level
+            double castChance = magerySkill / 100.0;
             
-            if (magerySkill >= 80.0)
-                castChance = 0.4; // 40% chance for grandmasters
-            else if (magerySkill >= 60.0)
-                castChance = 0.3; // 30% chance for proficient mages
-            else if (magerySkill >= 40.0)
-                castChance = 0.2; // 20% chance for average mages
-            else if (magerySkill >= 20.0)
-                castChance = 0.1; // 10% chance for novice mages
-
             // Increase chance if we're in danger
             if (playerBot.Hits < playerBot.HitsMax * 0.3)
-                castChance *= 1.5; // More likely to cast when hurt
+                castChance *= 1.5;
 
-            // Increase chance if target is strong
-            if (target.Hits > playerBot.Hits)
-                castChance *= 1.3; // More likely to cast against stronger enemies
+            // Cap the chance
+            castChance = Math.Min(castChance, 0.8);
 
-            return Utility.RandomDouble() < castChance;
+            bool shouldCast = Utility.RandomDouble() < castChance;
+            playerBot.DebugSay("ShouldCastSpell: Chance {0:F2}%, Result: {1}", castChance * 100, shouldCast);
+            
+            return shouldCast;
         }
 
-        private bool CastCombatSpell(Mobile target)
+        private Spell GetRandomCombatSpell(PlayerBot playerBot, Mobile target)
         {
-            PlayerBot playerBot = m_Mobile as PlayerBot;
-            if (playerBot == null)
-                return false;
+            if (playerBot.Mana < 8)
+            {
+                playerBot.DebugSay("GetRandomCombatSpell: Not enough mana ({0} < 8)", playerBot.Mana);
+                return null;
+            }
 
             double magerySkill = playerBot.Skills[SkillName.Magery].Base;
+            int maxCircle = (int)(magerySkill / 87.5 * 8.0);
             
-            // Determine what type of spell to cast based on situation
-            SpellType spellType = DetermineSpellType(playerBot, target);
-            
-            // Cast the appropriate spell
-            switch (spellType)
+            if (maxCircle > 8)
+                maxCircle = 8;
+
+            while (maxCircle > 1 && Spell.m_ManaTable[maxCircle - 1] > (playerBot.Mana / 2))
+                maxCircle--;
+
+            if (maxCircle < 1)
+                maxCircle = 1;
+
+            playerBot.DebugSay("GetRandomCombatSpell: Magery {0:F1}, Max Circle {1}, Mana {2}", magerySkill, maxCircle, playerBot.Mana);
+
+            int spell;
+            if (maxCircle < 3)
             {
-                case SpellType.Offensive:
-                    return CastOffensiveSpell(playerBot, target, magerySkill);
-                case SpellType.Defensive:
-                    return CastDefensiveSpell(playerBot, magerySkill);
-                case SpellType.Utility:
-                    return CastUtilitySpell(playerBot, target, magerySkill);
+                spell = maxCircle;
+            }
+            else
+            {
+                spell = Utility.Random(maxCircle) + 1;
+            }
+
+            Spell selectedSpell = null;
+
+            switch (spell)
+            {
                 default:
-                    return false;
-            }
-        }
+                case 1:
+                    {
+                        switch (Utility.Random(4))
+                        {
+                            case 0: selectedSpell = new Server.Spells.First.ClumsySpell(playerBot, null); break;
+                            case 1: selectedSpell = new Server.Spells.First.FeeblemindSpell(playerBot, null); break;
+                            case 2: selectedSpell = new Server.Spells.First.WeakenSpell(playerBot, null); break;
+                            default: selectedSpell = new Server.Spells.First.MagicArrowSpell(playerBot, null); break;
+                        }
+                    }
+                    break;
 
-        private enum SpellType
-        {
-            Offensive,
-            Defensive,
-            Utility
-        }
+                case 2:
+                    selectedSpell = new Server.Spells.Second.HarmSpell(playerBot, null);
+                    break;
 
-        private SpellType DetermineSpellType(PlayerBot playerBot, Mobile target)
-        {
-            double healthPercentage = (double)playerBot.Hits / playerBot.HitsMax;
-            double targetHealthPercentage = (double)target.Hits / target.HitsMax;
-            double distance = playerBot.GetDistanceToSqrt(target);
+                case 3:
+                    {
+                        switch (Utility.Random(2))
+                        {
+                            case 0: selectedSpell = new Server.Spells.Third.PoisonSpell(playerBot, null); break;
+                            default: selectedSpell = new Server.Spells.Third.FireballSpell(playerBot, null); break;
+                        }
+                    }
+                    break;
 
-            // Defensive spells when health is low
-            if (healthPercentage < 0.3)
-            {
-                if (Utility.RandomDouble() < 0.7) // 70% chance for defensive when hurt
-                    return SpellType.Defensive;
+                case 4:
+                    selectedSpell = new Server.Spells.Fourth.LightningSpell(playerBot, null);
+                    break;
+
+                case 5:
+                    {
+                        if (playerBot.Body.IsHuman)
+                        {
+                            switch (Utility.Random(2))
+                            {
+                                case 0: selectedSpell = new Server.Spells.Fifth.ParalyzeSpell(playerBot, null); break;
+                                default: selectedSpell = new Server.Spells.Fifth.MindBlastSpell(playerBot, null); break;
+                            }
+                        }
+                        else
+                        {
+                            selectedSpell = new Server.Spells.Fourth.LightningSpell(playerBot, null);
+                        }
+                    }
+                    break;
+
+                case 6:
+                    {
+                        switch (Utility.Random(2))
+                        {
+                            case 0: selectedSpell = new Server.Spells.Sixth.EnergyBoltSpell(playerBot, null); break;
+                            default: selectedSpell = new Server.Spells.Sixth.ExplosionSpell(playerBot, null); break;
+                        }
+                    }
+                    break;
+
+                case 7:
+                case 8:
+                    selectedSpell = new Server.Spells.Seventh.FlameStrikeSpell(playerBot, null);
+                    break;
             }
 
-            // Utility spells for positioning or escape
-            if (distance > 8 && healthPercentage < 0.5)
+            if (selectedSpell != null)
             {
-                if (Utility.RandomDouble() < 0.4) // 40% chance for utility when far and hurt
-                    return SpellType.Utility;
-            }
-
-            // Default to offensive
-            return SpellType.Offensive;
-        }
-
-        private bool CastOffensiveSpell(PlayerBot playerBot, Mobile target, double magerySkill)
-        {
-            // Determine spell circle based on skill level
-            SpellCircle maxCircle = DetermineMaxSpellCircle(magerySkill);
-            
-            // Select appropriate offensive spell
-            Spell spell = null;
-            
-            if (maxCircle >= SpellCircle.Eighth)
-            {
-                // Grandmaster spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.Eighth.EnergyVortexSpell(playerBot, null),
-                    new Server.Spells.Eighth.EarthquakeSpell(playerBot, null),
-                    new Server.Spells.Eighth.FireElementalSpell(playerBot, null),
-                    new Server.Spells.Eighth.SummonDaemonSpell(playerBot, null)
-                });
-            }
-            else if (maxCircle >= SpellCircle.Seventh)
-            {
-                // Seventh circle spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.Seventh.FlameStrikeSpell(playerBot, null),
-                    new Server.Spells.Seventh.MeteorSwarmSpell(playerBot, null),
-                    new Server.Spells.Seventh.ChainLightningSpell(playerBot, null),
-                    new Server.Spells.Seventh.ManaVampireSpell(playerBot, null)
-                });
-            }
-            else if (maxCircle >= SpellCircle.Sixth)
-            {
-                // Sixth circle spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.Sixth.DispelSpell(playerBot, null),
-                    new Server.Spells.Sixth.ExplosionSpell(playerBot, null),
-                    new Server.Spells.Sixth.EnergyBoltSpell(playerBot, null),
-                    new Server.Spells.Sixth.ParalyzeFieldSpell(playerBot, null)
-                });
-            }
-            else if (maxCircle >= SpellCircle.Fifth)
-            {
-                // Fifth circle spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.Fifth.BladeSpiritsSpell(playerBot, null),
-                    new Server.Spells.Fifth.DispelFieldSpell(playerBot, null),
-                    new Server.Spells.Fifth.MindBlastSpell(playerBot, null),
-                    new Server.Spells.Fifth.PoisonFieldSpell(playerBot, null)
-                });
-            }
-            else if (maxCircle >= SpellCircle.Fourth)
-            {
-                // Fourth circle spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.Fourth.LightningSpell(playerBot, null),
-                    new Server.Spells.Fourth.FireFieldSpell(playerBot, null),
-                    new Server.Spells.Fourth.CurseSpell(playerBot, null),
-                    new Server.Spells.Fourth.ManaDrainSpell(playerBot, null)
-                });
-            }
-            else if (maxCircle >= SpellCircle.Third)
-            {
-                // Third circle spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.Third.FireballSpell(playerBot, null),
-                    new Server.Spells.Third.PoisonSpell(playerBot, null),
-                    new Server.Spells.Third.WallOfStoneSpell(playerBot, null),
-                    new Server.Spells.Third.TelekinesisSpell(playerBot, null)
-                });
-            }
-            else if (maxCircle >= SpellCircle.Second)
-            {
-                // Second circle spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.Second.HarmSpell(playerBot, null),
-                    new Server.Spells.Second.MagicTrapSpell(playerBot, null),
-                    new Server.Spells.Second.ProtectionSpell(playerBot, null),
-                    new Server.Spells.Second.StrengthSpell(playerBot, null)
-                });
+                playerBot.DebugSay("GetRandomCombatSpell: Selected {0}", selectedSpell.GetType().Name);
             }
             else
             {
-                // First circle spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.First.ClumsySpell(playerBot, null),
-                    new Server.Spells.First.FeeblemindSpell(playerBot, null),
-                    new Server.Spells.First.MagicArrowSpell(playerBot, null),
-                    new Server.Spells.First.WeakenSpell(playerBot, null)
-                });
+                playerBot.DebugSay("GetRandomCombatSpell: No spell selected");
             }
 
-            if (spell != null)
-            {
-                // Start casting the spell
-                if (spell.Cast())
-                {
-                    // For offensive spells that need targeting, we need to call their Target method
-                    // This is a simplified approach - in a full implementation, you'd need to handle each spell type
-                    if (spell is Server.Spells.First.MagicArrowSpell)
-                    {
-                        ((Server.Spells.First.MagicArrowSpell)spell).Target(target);
-                    }
-                    else if (spell is Server.Spells.Second.HarmSpell)
-                    {
-                        ((Server.Spells.Second.HarmSpell)spell).Target(target);
-                    }
-                    else if (spell is Server.Spells.Third.FireballSpell)
-                    {
-                        ((Server.Spells.Third.FireballSpell)spell).Target(target);
-                    }
-                    else if (spell is Server.Spells.Fourth.LightningSpell)
-                    {
-                        ((Server.Spells.Fourth.LightningSpell)spell).Target(target);
-                    }
-                    else if (spell is Server.Spells.Fifth.MindBlastSpell)
-                    {
-                        ((Server.Spells.Fifth.MindBlastSpell)spell).Target(target);
-                    }
-                    else if (spell is Server.Spells.Sixth.EnergyBoltSpell)
-                    {
-                        ((Server.Spells.Sixth.EnergyBoltSpell)spell).Target(target);
-                    }
-                    else if (spell is Server.Spells.Seventh.FlameStrikeSpell)
-                    {
-                        ((Server.Spells.Seventh.FlameStrikeSpell)spell).Target(target);
-                    }
-                    else if (spell is Server.Spells.Seventh.MeteorSwarmSpell)
-                    {
-                        ((Server.Spells.Seventh.MeteorSwarmSpell)spell).Target(target);
-                    }
-                    else if (spell is Server.Spells.Seventh.ChainLightningSpell)
-                    {
-                        ((Server.Spells.Seventh.ChainLightningSpell)spell).Target(target);
-                    }
-                    else if (spell is Server.Spells.Eighth.EarthquakeSpell)
-                    {
-                        // Earthquake is self-cast - no Target method needed
-                        // The OnCast method will handle everything automatically
-                    }
-                    else if (spell is Server.Spells.Eighth.EnergyVortexSpell)
-                    {
-                        // Energy Vortex is self-cast - no Target method needed
-                    }
-                    else if (spell is Server.Spells.Eighth.FireElementalSpell)
-                    {
-                        // Fire Elemental is self-cast - no Target method needed
-                    }
-                    else if (spell is Server.Spells.Eighth.SummonDaemonSpell)
-                    {
-                        // Summon Daemon is self-cast - no Target method needed
-                    }
-                    else
-                    {
-                        // For spells that don't need targeting, just let them complete normally
-                        // The spell's OnCast method will handle the rest
-                    }
-                    
-                    playerBot.DebugSay("I cast {0}!", spell.GetType().Name);
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private bool CastDefensiveSpell(PlayerBot playerBot, double magerySkill)
-        {
-            SpellCircle maxCircle = DetermineMaxSpellCircle(magerySkill);
-            Spell spell = null;
-
-            if (maxCircle >= SpellCircle.Fifth)
-            {
-                // High-level defensive spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.Fifth.MagicReflectSpell(playerBot, null),
-                    new Server.Spells.Fourth.ArchProtectionSpell(playerBot, null),
-                    new Server.Spells.Third.BlessSpell(playerBot, null),
-                    new Server.Spells.Fourth.GreaterHealSpell(playerBot, null)
-                });
-            }
-            else if (maxCircle >= SpellCircle.Fourth)
-            {
-                // Mid-level defensive spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.Fourth.ArchProtectionSpell(playerBot, null),
-                    new Server.Spells.Third.BlessSpell(playerBot, null),
-                    new Server.Spells.Fourth.GreaterHealSpell(playerBot, null),
-                    new Server.Spells.Second.AgilitySpell(playerBot, null)
-                });
-            }
-            else
-            {
-                // Low-level defensive spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.Third.BlessSpell(playerBot, null),
-                    new Server.Spells.Second.AgilitySpell(playerBot, null),
-                    new Server.Spells.First.HealSpell(playerBot, null),
-                    new Server.Spells.Second.CureSpell(playerBot, null)
-                });
-            }
-
-            if (spell != null)
-            {
-                // Start casting the spell
-                if (spell.Cast())
-                {
-                    // For defensive spells that target self, call their Target method
-                    if (spell is Server.Spells.First.HealSpell)
-                    {
-                        ((Server.Spells.First.HealSpell)spell).Target(playerBot);
-                    }
-                    else if (spell is Server.Spells.Fourth.GreaterHealSpell)
-                    {
-                        ((Server.Spells.Fourth.GreaterHealSpell)spell).Target(playerBot);
-                    }
-                    else if (spell is Server.Spells.Second.CureSpell)
-                    {
-                        ((Server.Spells.Second.CureSpell)spell).Target(playerBot);
-                    }
-                    else if (spell is Server.Spells.Third.BlessSpell)
-                    {
-                        ((Server.Spells.Third.BlessSpell)spell).Target(playerBot);
-                    }
-                    else if (spell is Server.Spells.Second.AgilitySpell)
-                    {
-                        ((Server.Spells.Second.AgilitySpell)spell).Target(playerBot);
-                    }
-                    else if (spell is Server.Spells.Fourth.ArchProtectionSpell)
-                    {
-                        ((Server.Spells.Fourth.ArchProtectionSpell)spell).Target(playerBot);
-                    }
-                    else if (spell is Server.Spells.Fifth.MagicReflectSpell)
-                    {
-                        // Magic Reflect is self-cast - no Target method needed
-                    }
-                    else
-                    {
-                        // For spells that don't need targeting, just let them complete normally
-                    }
-                    
-                    playerBot.DebugSay("I cast defensive spell {0}!", spell.GetType().Name);
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private bool CastUtilitySpell(PlayerBot playerBot, Mobile target, double magerySkill)
-        {
-            SpellCircle maxCircle = DetermineMaxSpellCircle(magerySkill);
-            Spell spell = null;
-
-            if (maxCircle >= SpellCircle.Sixth)
-            {
-                // High-level utility spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.Sixth.InvisibilitySpell(playerBot, null),
-                    new Server.Spells.Sixth.MarkSpell(playerBot, null),
-                    new Server.Spells.Seventh.GateTravelSpell(playerBot, null),
-                    new Server.Spells.Fifth.IncognitoSpell(playerBot, null)
-                });
-            }
-            else if (maxCircle >= SpellCircle.Fifth)
-            {
-                // Mid-level utility spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.Fifth.IncognitoSpell(playerBot, null),
-                    new Server.Spells.Fourth.ArchCureSpell(playerBot, null),
-                    new Server.Spells.Third.MagicLockSpell(playerBot, null),
-                    new Server.Spells.Second.CunningSpell(playerBot, null)
-                });
-            }
-            else
-            {
-                // Low-level utility spells
-                spell = SelectRandomSpell(new Spell[] {
-                    new Server.Spells.Second.CunningSpell(playerBot, null),
-                    new Server.Spells.First.CreateFoodSpell(playerBot, null),
-                    new Server.Spells.Second.CureSpell(playerBot, null),
-                    new Server.Spells.First.ClumsySpell(playerBot, null)
-                });
-            }
-
-            if (spell != null)
-            {
-                // Start casting the spell
-                if (spell.Cast())
-                {
-                    // For utility spells that need targeting
-                    if (spell is Server.Spells.First.ClumsySpell)
-                    {
-                        ((Server.Spells.First.ClumsySpell)spell).Target(target);
-                    }
-                    else if (spell is Server.Spells.Second.CureSpell)
-                    {
-                        ((Server.Spells.Second.CureSpell)spell).Target(playerBot);
-                    }
-                    else if (spell is Server.Spells.Second.CunningSpell)
-                    {
-                        ((Server.Spells.Second.CunningSpell)spell).Target(playerBot);
-                    }
-                    else if (spell is Server.Spells.Fourth.ArchCureSpell)
-                    {
-                        ((Server.Spells.Fourth.ArchCureSpell)spell).Target(playerBot);
-                    }
-                    else if (spell is Server.Spells.Fifth.IncognitoSpell)
-                    {
-                        // Incognito is self-cast - no Target method needed
-                    }
-                    else if (spell is Server.Spells.Sixth.InvisibilitySpell)
-                    {
-                        // Invisibility is self-cast - no Target method needed
-                    }
-                    else if (spell is Server.Spells.Seventh.GateTravelSpell)
-                    {
-                        // Gate Travel is self-cast - no Target method needed
-                    }
-                    else if (spell is Server.Spells.Sixth.MarkSpell)
-                    {
-                        // Mark is self-cast - no Target method needed
-                    }
-                    else if (spell is Server.Spells.First.CreateFoodSpell)
-                    {
-                        // Create Food is self-cast - no Target method needed
-                    }
-                    else
-                    {
-                        // For spells that don't need targeting, just let them complete normally
-                    }
-                    
-                    playerBot.DebugSay("I cast utility spell {0}!", spell.GetType().Name);
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private SpellCircle DetermineMaxSpellCircle(double magerySkill)
-        {
-            if (magerySkill >= 80.0)
-                return SpellCircle.Eighth;
-            else if (magerySkill >= 70.0)
-                return SpellCircle.Seventh;
-            else if (magerySkill >= 60.0)
-                return SpellCircle.Sixth;
-            else if (magerySkill >= 50.0)
-                return SpellCircle.Fifth;
-            else if (magerySkill >= 40.0)
-                return SpellCircle.Fourth;
-            else if (magerySkill >= 30.0)
-                return SpellCircle.Third;
-            else if (magerySkill >= 20.0)
-                return SpellCircle.Second;
-            else
-                return SpellCircle.First;
-        }
-
-        private Spell SelectRandomSpell(Spell[] spells)
-        {
-            if (spells.Length == 0)
-                return null;
-
-            // Filter out spells that require reagents we don't have
-            var availableSpells = new List<Spell>();
-            foreach (Spell spell in spells)
-            {
-                if (HasRequiredReagents(m_Mobile as PlayerBot, spell))
-                {
-                    availableSpells.Add(spell);
-                }
-            }
-
-            if (availableSpells.Count == 0)
-                return null;
-
-            return availableSpells[Utility.Random(availableSpells.Count)];
-        }
-
-        private bool HasRequiredReagents(PlayerBot playerBot, Spell spell)
-        {
-            // Check if we have the required reagents for the spell
-            // This is a simplified check - in a full implementation, you'd check specific reagents
-            // For now, we'll assume PlayerBots have basic reagents available
-            
-            // Check mana requirement using the correct method
-            if (playerBot.Mana < spell.GetMana())
-                return false;
-
-            // For now, assume we have reagents (PlayerBots should be given basic reagents)
-            return true;
+            return selectedSpell;
         }
 
         public static int[] m_ManaTable = new int[]{ 4, 6, 9, 11, 14, 20, 40, 50 };
@@ -1666,6 +1571,55 @@ namespace Server.Mobiles
                         "I fight for what I believe!",
                         "Victory or death!"
                     };
+            }
+        }
+
+        /// <summary>
+        /// Moves any non-spell-channeling weapons/shields from the hands into the
+        /// backpack so magery can be cast.
+        /// </summary>
+        private void EnsureHandsFree()
+        {
+            if (m_Mobile == null || m_Mobile.Deleted)
+                return;
+
+            Container pack = m_Mobile.Backpack;
+            if (pack == null)
+                return;
+
+            Item hand = m_Mobile.FindItemOnLayer(Layer.OneHanded);
+            if (hand != null && !hand.AllowEquipedCast(m_Mobile))
+            {
+                m_SavedOneHand = hand;
+                pack.DropItem(hand);
+            }
+
+            hand = m_Mobile.FindItemOnLayer(Layer.TwoHanded);
+            if (hand != null && !hand.AllowEquipedCast(m_Mobile))
+            {
+                m_SavedTwoHand = hand;
+                pack.DropItem(hand);
+            }
+        }
+
+        private void ReEquipWeapons()
+        {
+            if (m_Mobile == null || m_Mobile.Deleted)
+                return;
+
+            Container pack = m_Mobile.Backpack;
+            if (pack == null)
+                return;
+
+            if (m_SavedOneHand != null)
+            {
+                m_SavedOneHand.MoveToWorld(m_Mobile.Location, m_Mobile.Map);
+                m_SavedOneHand = null;
+            }
+            else if (m_SavedTwoHand != null)
+            {
+                m_SavedTwoHand.MoveToWorld(m_Mobile.Location, m_Mobile.Map);
+                m_SavedTwoHand = null;
             }
         }
     }

@@ -18,6 +18,7 @@ namespace Server.Mobiles
         private SkillName m_PreferedCombatSkill;
         private int m_SpeechHue; // Individual speech color for each PlayerBot
         private DateTime m_LastSpeechTime; // Track last speech time to prevent spam
+        private DateTime m_LastSpellCastTime; // Track last spell cast time to prevent spam
 
         #region Accessors
         [CommandProperty(AccessLevel.GameMaster)]
@@ -38,6 +39,9 @@ namespace Server.Mobiles
 
         [CommandProperty(AccessLevel.GameMaster)]
         public DateTime LastSpeechTime { get { return m_LastSpeechTime; } set { m_LastSpeechTime = value; } }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public DateTime LastSpellCastTime { get { return m_LastSpellCastTime; } set { m_LastSpellCastTime = value; } }
         #endregion
 
         public static string[] m_GuildTypes = new string[] { "", " (Chaos)", " (Order)" };
@@ -89,6 +93,7 @@ namespace Server.Mobiles
             writer.Write((int)m_PreferedCombatSkill);
             writer.Write((int)m_SpeechHue);
             writer.Write(m_LastSpeechTime);
+            writer.Write(m_LastSpellCastTime);
         }
 
         public override void Deserialize(GenericReader reader)
@@ -105,12 +110,15 @@ namespace Server.Mobiles
             m_PreferedCombatSkill = (SkillName)reader.ReadInt();
             m_SpeechHue = reader.ReadInt();
             m_LastSpeechTime = reader.ReadDateTime();
+            m_LastSpellCastTime = reader.ReadDateTime();
         }
         #endregion
 
         #region Inits
         private void InitPersona()
         {
+            this.Debug = true;
+
             // Note about Titles (Karma & Professions)
             // They do not need to be set at creation time. They're handled in Titles.cs, same way as real players.
             // So it'll be possible to see "The Glorious Lord Soandso, Grandmaster Swordsman" instead of traditional NPC titles.
@@ -155,6 +163,9 @@ namespace Server.Mobiles
             
             // Initialize LastSpeechTime
             m_LastSpeechTime = DateTime.MinValue;
+            
+            // Initialize LastSpellCastTime
+            m_LastSpellCastTime = DateTime.MinValue;
         }
 
         private void InitFameAndKarma()
@@ -293,6 +304,10 @@ namespace Server.Mobiles
                     SetSkill(SkillName.RemoveTrap, 10, 25);
                     SetSkill(SkillName.Cartography, 5, 20);
                     SetSkill(SkillName.Camping, 10, 25);
+                    // Add basic magic skills for PKs
+                    SetSkill(SkillName.Magery, 10, 25);
+                    SetSkill(SkillName.Meditation, 5, 20);
+                    SetSkill(SkillName.EvalInt, 10, 25);
                     break;
                     
                 case PlayerBotPersona.PlayerBotExperience.Average:
@@ -308,6 +323,10 @@ namespace Server.Mobiles
                     SetSkill(SkillName.Camping, 25, 45);
                     SetSkill(SkillName.Anatomy, 30, 50);
                     SetSkill(SkillName.Healing, 25, 45);
+                    // Add improved magic skills for PKs
+                    SetSkill(SkillName.Magery, 25, 45);
+                    SetSkill(SkillName.Meditation, 20, 40);
+                    SetSkill(SkillName.EvalInt, 25, 45);
                     break;
                     
                 case PlayerBotPersona.PlayerBotExperience.Proficient:
@@ -325,6 +344,11 @@ namespace Server.Mobiles
                     SetSkill(SkillName.Healing, 45, 65);
                     SetSkill(SkillName.AnimalLore, 30, 50);
                     SetSkill(SkillName.Veterinary, 25, 45);
+                    // Add advanced magic skills for PKs
+                    SetSkill(SkillName.Magery, 45, 70);
+                    SetSkill(SkillName.Meditation, 40, 65);
+                    SetSkill(SkillName.EvalInt, 45, 70);
+                    SetSkill(SkillName.MagicResist, 35, 55);
                     break;
                     
                 case PlayerBotPersona.PlayerBotExperience.Grandmaster:
@@ -344,6 +368,11 @@ namespace Server.Mobiles
                     SetSkill(SkillName.Veterinary, 45, 65);
                     SetSkill(SkillName.ArmsLore, 60, 80);
                     SetSkill(SkillName.ItemID, 55, 75);
+                    // Add master magic skills for PKs
+                    SetSkill(SkillName.Magery, 70, 95);
+                    SetSkill(SkillName.Meditation, 65, 90);
+                    SetSkill(SkillName.EvalInt, 70, 95);
+                    SetSkill(SkillName.MagicResist, 55, 75);
                     break;
             }
         }
@@ -434,8 +463,8 @@ namespace Server.Mobiles
                     SetSkill(SkillName.ArmsLore, 50, 70);
                     SetSkill(SkillName.TasteID, 40, 60);
                     SetSkill(SkillName.EvalInt, 45, 65);
-                    SetSkill(SkillName.Magery, 20, 40);
-                    SetSkill(SkillName.Meditation, 15, 35);
+                    SetSkill(SkillName.Magery, 35, 60);
+                    SetSkill(SkillName.Meditation, 30, 55);
                     break;
                     
                 case PlayerBotPersona.PlayerBotExperience.Grandmaster:
@@ -443,9 +472,9 @@ namespace Server.Mobiles
                     SetSkill(SkillName.ArmsLore, 70, 90);
                     SetSkill(SkillName.TasteID, 60, 80);
                     SetSkill(SkillName.EvalInt, 65, 85);
-                    SetSkill(SkillName.Magery, 40, 60);
-                    SetSkill(SkillName.Meditation, 35, 55);
-                    SetSkill(SkillName.MagicResist, 30, 50);
+                    SetSkill(SkillName.Magery, 55, 85);
+                    SetSkill(SkillName.Meditation, 50, 80);
+                    SetSkill(SkillName.MagicResist, 40, 65);
                     break;
             }
         }
@@ -503,10 +532,10 @@ namespace Server.Mobiles
                     SetSkill(SkillName.Veterinary, 35, 55);
                     SetSkill(SkillName.Herding, 30, 50);
                     SetSkill(SkillName.AnimalTaming, 25, 45);
-                    SetSkill(SkillName.Magery, 20, 40);
-                    SetSkill(SkillName.Meditation, 15, 35);
-                    SetSkill(SkillName.EvalInt, 20, 40);
-                    SetSkill(SkillName.TasteID, 15, 35);
+                    SetSkill(SkillName.Magery, 35, 65);
+                    SetSkill(SkillName.Meditation, 30, 60);
+                    SetSkill(SkillName.EvalInt, 35, 60);
+                    SetSkill(SkillName.TasteID, 30, 50);
                     break;
                     
                 case PlayerBotPersona.PlayerBotExperience.Grandmaster:
@@ -525,13 +554,13 @@ namespace Server.Mobiles
                     SetSkill(SkillName.Veterinary, 55, 75);
                     SetSkill(SkillName.Herding, 50, 70);
                     SetSkill(SkillName.AnimalTaming, 45, 65);
-                    SetSkill(SkillName.Magery, 40, 60);
-                    SetSkill(SkillName.Meditation, 35, 55);
-                    SetSkill(SkillName.EvalInt, 40, 60);
-                    SetSkill(SkillName.TasteID, 35, 55);
-                    SetSkill(SkillName.MagicResist, 30, 50);
-                    SetSkill(SkillName.Lockpicking, 25, 45);
-                    SetSkill(SkillName.RemoveTrap, 20, 40);
+                    SetSkill(SkillName.Magery, 55, 90);
+                    SetSkill(SkillName.Meditation, 50, 85);
+                    SetSkill(SkillName.EvalInt, 55, 85);
+                    SetSkill(SkillName.TasteID, 50, 80);
+                    SetSkill(SkillName.MagicResist, 45, 70);
+                    SetSkill(SkillName.Lockpicking, 30, 55);
+                    SetSkill(SkillName.RemoveTrap, 25, 50);
                     break;
             }
         }
@@ -1278,6 +1307,28 @@ namespace Server.Mobiles
             PublicOverheadMessage(MessageType.Emote, m_SpeechHue, false, text);
         }
 
+        public override void OnThink()
+        {
+            base.OnThink();
+
+            // Help PlayerBots regenerate mana more effectively
+            if (Alive && !Paralyzed && !Frozen)
+            {
+                double meditationSkill = Skills[SkillName.Meditation].Base;
+                
+                // Regenerate mana based on meditation skill
+                if (meditationSkill > 0 && Mana < ManaMax)
+                {
+                    // Base regeneration + meditation bonus
+                    int manaGain = 1 + (int)(meditationSkill / 20.0);
+                    
+                    // Cap mana gain to prevent excessive regeneration
+                    manaGain = Math.Min(manaGain, 5);
+                    
+                    Mana = Math.Min(ManaMax, Mana + manaGain);
+                }
+            }
+        }
         #endregion
 
         public virtual Mobile GetOwner()
