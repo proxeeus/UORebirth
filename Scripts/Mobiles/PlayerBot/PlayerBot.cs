@@ -365,10 +365,9 @@ namespace Server.Mobiles
             // Add shield if the bot has parry skill
             if (Skills[SkillName.Parry].Base > 0)
             {
-                if (Skills[SkillName.Parry].Base >= 50)
-                    AddItem(new MetalShield());
-                else
-                    AddItem(new WoodenShield());
+                BaseShield shield = GenerateShield();
+                if (shield != null)
+                    AddItem(shield);
             }
         }
 
@@ -985,6 +984,88 @@ namespace Server.Mobiles
                 return false;
             }
             return SetControlMaster(m);
+        }
+
+        private BaseShield GenerateShield()
+        {
+            var shieldPool = new List<BaseShield>();
+            
+            // Get base stats for shield selection
+            int str = this.Str;
+            
+            // Add shields based on strength requirements and experience
+            if (str >= 20)
+            {
+                shieldPool.Add(new Buckler());        // Str 20, Armor 7
+                shieldPool.Add(new WoodenShield());   // Str 20, Armor 8
+                shieldPool.Add(new WoodenKiteShield()); // Str 20, Armor 12
+            }
+            
+            if (str >= 35)
+            {
+                shieldPool.Add(new BronzeShield());   // Str 35, Armor 10
+            }
+            
+            if (str >= 45)
+            {
+                shieldPool.Add(new MetalShield());    // Str 45, Armor 11
+                shieldPool.Add(new MetalKiteShield()); // Str 45, Armor 16
+            }
+            
+            if (str >= 90)
+            {
+                shieldPool.Add(new HeaterShield());   // Str 90, Armor 23
+            }
+            
+            // Experience-based preferences
+            switch (m_Persona.Experience)
+            {
+                case PlayerBotPersona.PlayerBotExperience.Newbie:
+                    // Newbies prefer lighter shields
+                    if (str >= 20)
+                    {
+                        shieldPool.Clear();
+                        shieldPool.Add(new Buckler());
+                        shieldPool.Add(new WoodenShield());
+                    }
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Average:
+                    // Average players get a mix, but avoid the heaviest
+                    if (str >= 90)
+                    {
+                        shieldPool.RemoveAll(s => s is HeaterShield);
+                    }
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Proficient:
+                    // Proficient players can handle most shields
+                    break;
+                    
+                case PlayerBotPersona.PlayerBotExperience.Grandmaster:
+                    // Grandmasters prefer the best available shields
+                    if (str >= 90)
+                    {
+                        shieldPool.Clear();
+                        shieldPool.Add(new HeaterShield());
+                        shieldPool.Add(new MetalKiteShield());
+                    }
+                    else if (str >= 45)
+                    {
+                        shieldPool.Clear();
+                        shieldPool.Add(new MetalKiteShield());
+                        shieldPool.Add(new MetalShield());
+                    }
+                    break;
+            }
+            
+            // Return a random shield from the pool, or null if none available
+            if (shieldPool.Count > 0)
+            {
+                return shieldPool[Utility.Random(shieldPool.Count)];
+            }
+            
+            return null;
         }
     }
 }
