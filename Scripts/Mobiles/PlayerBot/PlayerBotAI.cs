@@ -266,6 +266,14 @@ namespace Server.Mobiles
                 return true;
             }
 
+            // If we are casting a spell, stand still and wait for it to complete.
+            // This prevents the AI from running towards the target while casting.
+            if (m_Mobile.Spell != null && m_Mobile.Spell.IsCasting)
+            {
+                m_Mobile.DebugSay("Casting in progress, holding position.");
+                return true; // Do nothing else this tick.
+            }
+
             // Handle combat speech and emotes
             HandleCombatSpeech(combatant);
 
