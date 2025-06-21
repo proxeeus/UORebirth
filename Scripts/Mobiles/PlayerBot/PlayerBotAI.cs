@@ -1384,7 +1384,7 @@ namespace Server.Mobiles
                 return;
 
             // Add additional cooldown - don't speak too frequently
-            if (m_Mobile.LastSpeechTime > DateTime.Now.AddSeconds(-8)) // 8 second cooldown between speeches
+            if (playerBot.LastSpeechTime > DateTime.Now.AddSeconds(-8)) // 8 second cooldown between speeches
                 return;
 
             // Determine what type of speech to make based on situation
@@ -1416,7 +1416,7 @@ namespace Server.Mobiles
             }
 
             // Update last speech time
-            m_Mobile.LastSpeechTime = DateTime.Now;
+            playerBot.LastSpeechTime = DateTime.Now;
         }
 
         private void SayCombatTaunt(Mobile target, PlayerBot playerBot)
@@ -1428,7 +1428,7 @@ namespace Server.Mobiles
                 taunt = taunt.Replace("{target}", target.Name);
                 taunt = taunt.Replace("{self}", playerBot.Name);
                 
-                playerBot.Say(taunt);
+                playerBot.SayWithHue(taunt);
             }
         }
 
@@ -1441,7 +1441,7 @@ namespace Server.Mobiles
                 boast = boast.Replace("{target}", target.Name);
                 boast = boast.Replace("{self}", playerBot.Name);
                 
-                playerBot.Say(boast);
+                playerBot.SayWithHue(boast);
             }
         }
 
@@ -1453,7 +1453,7 @@ namespace Server.Mobiles
                 string battleCry = battleCries[Utility.Random(battleCries.Length)];
                 battleCry = battleCry.Replace("{self}", playerBot.Name);
                 
-                playerBot.Say(battleCry);
+                playerBot.SayWithHue(battleCry);
             }
         }
 
@@ -1470,7 +1470,7 @@ namespace Server.Mobiles
                     "*grits teeth in determination*",
                     "*wipes blood from face*"
                 };
-                playerBot.Emote(desperateEmotes[Utility.Random(desperateEmotes.Length)]);
+                playerBot.EmoteWithHue(desperateEmotes[Utility.Random(desperateEmotes.Length)]);
             }
             else if (healthPercentage > 0.8)
             {
@@ -1481,7 +1481,7 @@ namespace Server.Mobiles
                     "*smirks confidently*",
                     "*rolls shoulders*"
                 };
-                playerBot.Emote(confidentEmotes[Utility.Random(confidentEmotes.Length)]);
+                playerBot.EmoteWithHue(confidentEmotes[Utility.Random(confidentEmotes.Length)]);
             }
             else
             {
@@ -1494,7 +1494,7 @@ namespace Server.Mobiles
                 };
                 string emote = focusedEmotes[Utility.Random(focusedEmotes.Length)];
                 emote = emote.Replace("{target}", target.Name);
-                playerBot.Emote(emote);
+                playerBot.EmoteWithHue(emote);
             }
         }
 

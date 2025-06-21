@@ -16,6 +16,8 @@ namespace Server.Mobiles
         private bool m_IsPlayerKiller;
         private bool m_PrefersMelee;
         private SkillName m_PreferedCombatSkill;
+        private int m_SpeechHue; // Individual speech color for each PlayerBot
+        private DateTime m_LastSpeechTime; // Track last speech time to prevent spam
 
         #region Accessors
         [CommandProperty(AccessLevel.GameMaster)]
@@ -30,6 +32,12 @@ namespace Server.Mobiles
 
         [CommandProperty(AccessLevel.GameMaster)]
         public SkillName PreferedCombatSkill { get { return m_PreferedCombatSkill; } set { m_PreferedCombatSkill = value; } }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public int SpeechHue { get { return m_SpeechHue; } set { m_SpeechHue = value; } }
+
+        [CommandProperty(AccessLevel.GameMaster)]
+        public DateTime LastSpeechTime { get { return m_LastSpeechTime; } set { m_LastSpeechTime = value; } }
         #endregion
 
         public static string[] m_GuildTypes = new string[] { "", " (Chaos)", " (Order)" };
@@ -79,6 +87,8 @@ namespace Server.Mobiles
             writer.Write((bool)m_IsPlayerKiller);
             writer.Write((bool)m_PrefersMelee);
             writer.Write((int)m_PreferedCombatSkill);
+            writer.Write((int)m_SpeechHue);
+            writer.Write(m_LastSpeechTime);
         }
 
         public override void Deserialize(GenericReader reader)
@@ -93,6 +103,8 @@ namespace Server.Mobiles
             m_IsPlayerKiller = reader.ReadBool();
             m_PrefersMelee = reader.ReadBool();
             m_PreferedCombatSkill = (SkillName)reader.ReadInt();
+            m_SpeechHue = reader.ReadInt();
+            m_LastSpeechTime = reader.ReadDateTime();
         }
         #endregion
 
@@ -137,6 +149,12 @@ namespace Server.Mobiles
             
             // Initialize Fame and Karma based on profile and experience
             InitFameAndKarma();
+            
+            // Initialize SpeechHue with a random color (using a range of distinct colors)
+            m_SpeechHue = Utility.RandomList(0x22, 0x35, 0x3F, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C, 0x7D, 0x7E, 0x7F, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F, 0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D, 0x9E, 0x9F, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF, 0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF, 0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF, 0xE0, 0xE1, 0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF, 0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF);
+            
+            // Initialize LastSpeechTime
+            m_LastSpeechTime = DateTime.MinValue;
         }
 
         private void InitFameAndKarma()
@@ -1237,6 +1255,27 @@ namespace Server.Mobiles
             }
 
             base.OnSpeech(e);
+        }
+
+        // Custom speech methods that use the PlayerBot's speech hue
+        public void SayWithHue(string text)
+        {
+            PublicOverheadMessage(MessageType.Regular, m_SpeechHue, false, text);
+        }
+
+        public void SayWithHue(int number)
+        {
+            PublicOverheadMessage(MessageType.Regular, m_SpeechHue, number);
+        }
+
+        public void SayWithHue(int number, string args)
+        {
+            PublicOverheadMessage(MessageType.Regular, m_SpeechHue, number, args);
+        }
+
+        public void EmoteWithHue(string text)
+        {
+            PublicOverheadMessage(MessageType.Emote, m_SpeechHue, false, text);
         }
 
         #endregion
