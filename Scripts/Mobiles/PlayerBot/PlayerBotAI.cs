@@ -352,14 +352,60 @@ namespace Server.Mobiles
             }
             else if (m_Mobile.Spell == null)
             {
-                // Move towards target if not casting
-                RunTo(combatant);
+                PlayerBot bot = m_Mobile as PlayerBot;
+                if (bot != null && !bot.PrefersMelee)
+                {
+                    HandleRangedCombat(combatant);
+                }
+                else
+                {
+                    // Melee logic: Move towards target if not casting
+                    RunTo(combatant);
+                }
 
                 // Try to re-equip weapons while moving / not casting
                 ReEquipWeapons();
             }
 
             return true;
+        }
+
+        private void HandleRangedCombat(Mobile combatant)
+        {
+            Item weapon = m_Mobile.Weapon as Item;
+
+            // Ranged bots without a ranged weapon should fallback to melee behavior.
+            if (!(weapon is BaseRanged))
+            {
+                RunTo(combatant);
+                return;
+            }
+
+            BaseRanged rangedWeapon = (BaseRanged)weapon;
+            int maxRange = rangedWeapon.MaxRange;
+            int minIdealRange = 4; // Stay at least this far away.
+            int idealRange = Math.Max(minIdealRange, maxRange - 2);
+
+            int dist = (int)m_Mobile.GetDistanceToSqrt(combatant);
+
+            if (dist > maxRange || !m_Mobile.InLOS(combatant))
+            {
+                m_Mobile.DebugSay("Ranged: Target is out of range or sight. Moving closer.");
+                if (!MoveTo(combatant, true, idealRange))
+                    OnFailedMove();
+            }
+            else if (dist < minIdealRange)
+            {
+                m_Mobile.DebugSay("Ranged: Target is too close. Backing away.");
+                Direction dir = m_Mobile.GetDirectionTo(combatant);
+                DoMove((Direction)(((int)dir + 4) & 0x7)); // Turn around and walk
+            }
+            else
+            {
+                m_Mobile.DebugSay("Ranged: Target in range. Holding position.");
+                // In ideal range, stop moving and face the target to attack.
+                m_Mobile.Direction = m_Mobile.GetDirectionTo(combatant);
+            }
         }
 
         public override bool DoActionGuard()
