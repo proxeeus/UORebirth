@@ -4,6 +4,7 @@ using Server.Network;
 using Server.Targeting;
 using Server.Mobiles;
 using Server.Spells.Second;
+using Server.Mobiles;
 
 namespace Server.Spells
 {
@@ -152,7 +153,7 @@ namespace Server.Spells
 
 		public virtual bool ConsumeReagents()
 		{
-			if ( m_Scroll != null || !m_Caster.Player )
+			if ( m_Scroll != null || (!m_Caster.Player && !(m_Caster is PlayerBot && ((PlayerBot)m_Caster).ConsumesReagents)) )
 				return true;
 
 			if ( AosAttributes.GetValue( m_Caster, AosAttribute.LowerRegCost ) > Utility.Random( 100 ) )

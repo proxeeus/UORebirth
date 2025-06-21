@@ -42,7 +42,19 @@ namespace Server.Mobiles
 
         [CommandProperty(AccessLevel.GameMaster)]
         public DateTime LastSpellCastTime { get { return m_LastSpellCastTime; } set { m_LastSpellCastTime = value; } }
+        
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool ConsumesReagents { get { return m_ConsumesReagents; } set { m_ConsumesReagents = value; } }
+        
+        [CommandProperty(AccessLevel.GameMaster)]
+        public bool ConsumesAmmo { get { return m_ConsumesAmmo; } set { m_ConsumesAmmo = value; } }
         #endregion
+
+        // The following properties are used to control resource consumption.
+        // They are set to true by default, but can be set to false to disable resource consumption.
+        // This is useful for debugging and testing.
+        private bool m_ConsumesReagents = true;
+        private bool m_ConsumesAmmo = true;
 
         public static string[] m_GuildTypes = new string[] { "", " (Chaos)", " (Order)" };
 
@@ -84,8 +96,9 @@ namespace Server.Mobiles
         {
             base.Serialize(writer);
 
-            writer.Write((int)0); // version 
+            writer.Write((int)1); // version 
 
+            // version 0
             writer.Write((int)m_Persona.Experience);
             writer.Write((int)m_Persona.Profile);
             writer.Write((bool)m_IsPlayerKiller);
@@ -94,12 +107,16 @@ namespace Server.Mobiles
             writer.Write((int)m_SpeechHue);
             writer.Write(m_LastSpeechTime);
             writer.Write(m_LastSpellCastTime);
+            writer.Write(m_ConsumesReagents);
+            writer.Write(m_ConsumesAmmo);
         }
 
         public override void Deserialize(GenericReader reader)
         {
             base.Deserialize(reader);
             int version = reader.ReadInt();
+
+
 
             m_Persona = new PlayerBotPersona();
 
@@ -111,6 +128,8 @@ namespace Server.Mobiles
             m_SpeechHue = reader.ReadInt();
             m_LastSpeechTime = reader.ReadDateTime();
             m_LastSpellCastTime = reader.ReadDateTime();
+            m_ConsumesReagents = reader.ReadBool();
+            m_ConsumesAmmo = reader.ReadBool();
         }
         #endregion
 
@@ -1317,6 +1336,10 @@ namespace Server.Mobiles
         public override void OnThink()
         {
             base.OnThink();
+
+            // Set resource consumption flags to true / false to activate / deactivate resource consumption.
+            ConsumesReagents = true;
+            ConsumesAmmo = true;
 
             // Help PlayerBots regenerate mana more effectively
             if (Alive && !Paralyzed && !Frozen)

@@ -1,6 +1,7 @@
 using System;
 using Server.Items;
 using Server.Network;
+using Server.Mobiles;
 
 namespace Server.Items
 {
@@ -105,7 +106,7 @@ namespace Server.Items
 		{
 			Container pack = attacker.Backpack;
 
-			if ( attacker.Player && (pack == null || !pack.ConsumeTotal( AmmoType, 1 )) )
+			if ( (attacker.Player || (attacker is PlayerBot && ((PlayerBot)attacker).ConsumesAmmo)) && (pack == null || !pack.ConsumeTotal( AmmoType, 1 )) )
 				return false;
 
 			attacker.MovingEffect( defender, EffectID, 18, 1, false, false );
