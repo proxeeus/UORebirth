@@ -117,7 +117,7 @@ namespace Server.Mobiles
         #region Inits
         private void InitPersona()
         {
-            this.Debug = true;
+            this.Debug = false;
 
             // Note about Titles (Karma & Professions)
             // They do not need to be set at creation time. They're handled in Titles.cs, same way as real players.
@@ -691,7 +691,14 @@ namespace Server.Mobiles
             {
                 BaseShield shield = GenerateShield();
                 if (shield != null)
-                    AddItem(shield);
+                {
+                    // If the bot is already wielding a two-handed weapon (like a bow or halberd),
+                    // put the shield in their backpack. Otherwise, equip it.
+                    if (FindItemOnLayer(Layer.TwoHanded) is BaseWeapon)
+                        PackItem(shield);
+                    else
+                        AddItem(shield);
+                }
             }
         }
 

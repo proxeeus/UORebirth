@@ -12,11 +12,13 @@ namespace Server.Mobiles
     public class PlayerBotAI : BaseAI
     {
         private DateTime m_NextCastTime;
-        private Item m_SavedOneHand;
-        private Item m_SavedTwoHand;
+        private Item m_SavedWeapon;
+        private Item m_SavedShield;
 
         public PlayerBotAI(BaseCreature m) : base(m)
         {
+            m_SavedWeapon = null;
+            m_SavedShield = null;
         }
 
         public override bool Think()
@@ -331,6 +333,10 @@ namespace Server.Mobiles
                             m_NextCastTime = DateTime.Now + delay;
                             
                             playerBot.DebugSay("SUCCESS: Casting {0} on {1}", spell.GetType().Name, combatant.Name);
+
+                            // DO NOT re-equip here. The spell has just started.
+                            // Re-equipping will happen on the next Think() tick when Spell == null.
+
                             return true;
                         }
                         else
@@ -344,10 +350,13 @@ namespace Server.Mobiles
                     }
                 }
             }
-            else if (m_Mobile.Spell == null || !m_Mobile.Spell.IsCasting)
+            else if (m_Mobile.Spell == null)
             {
                 // Move towards target if not casting
                 RunTo(combatant);
+
+                // Try to re-equip weapons while moving / not casting
+                ReEquipWeapons();
             }
 
             return true;
@@ -1124,11 +1133,8 @@ namespace Server.Mobiles
             }
 
             // Check if we're not already casting a spell
-            if (playerBot.Spell != null && playerBot.Spell.IsCasting)
-            {
-                playerBot.DebugSay("ShouldCastSpell: Already casting a spell");
+            if (playerBot.Spell != null)
                 return false;
-            }
 
             // Check if we have enough mana
             if (playerBot.Mana < 8)
@@ -1587,40 +1593,91 @@ namespace Server.Mobiles
             if (pack == null)
                 return;
 
-            Item hand = m_Mobile.FindItemOnLayer(Layer.OneHanded);
-            if (hand != null && !hand.AllowEquipedCast(m_Mobile))
+            // Clear any previously saved items to prevent stale references.
+            m_SavedWeapon = null;
+            m_SavedShield = null;
+
+            Item one = m_Mobile.FindItemOnLayer(Layer.OneHanded);
+            Item two = m_Mobile.FindItemOnLayer(Layer.TwoHanded);
+
+            // The item on Layer.TwoHanded could be a 2H weapon OR a shield.
+            // Check it first.
+            if (two != null && !two.AllowEquipedCast(m_Mobile))
             {
-                m_SavedOneHand = hand;
-                pack.DropItem(hand);
+                if (two is BaseShield)
+                {
+                    m_SavedShield = two;
+                    pack.DropItem(two);
+                }
+                else // It must be a two-handed weapon
+                {
+                    m_SavedWeapon = two;
+                    pack.DropItem(two);
+                }
             }
 
-            hand = m_Mobile.FindItemOnLayer(Layer.TwoHanded);
-            if (hand != null && !hand.AllowEquipedCast(m_Mobile))
+            // Now check the one-handed layer.
+            if (one != null && !one.AllowEquipedCast(m_Mobile))
             {
-                m_SavedTwoHand = hand;
-                pack.DropItem(hand);
+                // A 1H weapon cannot be equipped with a 2H weapon.
+                // In a valid state, m_SavedWeapon should be null here.
+                // This prevents the overwrite bug.
+                if (m_SavedWeapon == null)
+                {
+                    m_SavedWeapon = one;
+                    pack.DropItem(one);
+                }
             }
         }
 
+        /// <summary>
+        /// Attempts to re-equip previously saved weapons if the bot is not currently casting.
+        /// </summary>
         private void ReEquipWeapons()
         {
-            if (m_Mobile == null || m_Mobile.Deleted)
+            // Wait until the spell is fully finished (mobile.Spell becomes null)
+            if (m_Mobile == null || m_Mobile.Deleted || m_Mobile.Spell != null)
+                return;
+
+            // If hands are already full, do nothing. This prevents interrupting other actions.
+            if (m_Mobile.FindItemOnLayer(Layer.OneHanded) != null || m_Mobile.FindItemOnLayer(Layer.TwoHanded) != null)
                 return;
 
             Container pack = m_Mobile.Backpack;
             if (pack == null)
                 return;
 
-            if (m_SavedOneHand != null)
+            PlayerBot bot = m_Mobile as PlayerBot;
+            if (bot == null) return; // This AI is only for PlayerBots
+
+            // If the bot is an archer, its top priority is to re-equip its bow.
+            if (!bot.PrefersMelee && bot.PreferedCombatSkill == SkillName.Archery)
             {
-                m_SavedOneHand.MoveToWorld(m_Mobile.Location, m_Mobile.Map);
-                m_SavedOneHand = null;
+                // Did we save a ranged weapon? If so, equip it.
+                if (m_SavedWeapon != null && m_SavedWeapon is BaseRanged && m_SavedWeapon.IsChildOf(pack))
+                {
+                    m_Mobile.EquipItem(m_SavedWeapon);
+                    m_SavedWeapon = null;
+                    m_SavedShield = null; // Can't use a shield, so clear the reference.
+                    return; // Job done.
+                }
             }
-            else if (m_SavedTwoHand != null)
+
+            // For all other bots, or if the archer's bow wasn't the saved weapon,
+            // use the standard equip logic.
+            if (m_SavedWeapon != null && m_SavedWeapon.IsChildOf(pack))
             {
-                m_SavedTwoHand.MoveToWorld(m_Mobile.Location, m_Mobile.Map);
-                m_SavedTwoHand = null;
+                m_Mobile.EquipItem(m_SavedWeapon);
             }
+
+            if (m_SavedShield != null && m_SavedShield.IsChildOf(pack))
+            {
+                m_Mobile.EquipItem(m_SavedShield);
+            }
+
+            // Clear saved references after attempting to equip.
+            m_SavedWeapon = null;
+            m_SavedShield = null;
         }
     }
 }
