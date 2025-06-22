@@ -1,0 +1,79 @@
+1. Top-level concept: the “PlayerBotDirector”
+Think of a single service object that lives for the life of the shard:
+Singleton (PlayerBotDirector), started from Scripts/Engines/ in WorldLoad or ServerList.<br/>
+Holds one in-memory registry:
+Dictionary<Serial, PlayerBotInfo> where PlayerBotInfo records location, current task, personality, last save, etc.
+Drives two internal timers:
+a) “Population Tick” (30–60 s) – keeps global & per-region bot counts inside target ranges.
+b) “Scene Tick” (10 s) – evaluates players’ vicinity and decides whether to trigger dynamic scenes (wars, merchants, escorts, etc.).
+Exposes a simple API that other systems can call:
+Apply to PlayerBotAI....
+;
+Nothing spawns itself – every new PlayerBot is created via the director, so the registry is always authoritative.
+2. Region population model
+Instead of scattering static spawners everywhere, keep targets per logical region:
+Apply to PlayerBotAI....
+)
+These targets can live in a JSON / XML table reloadable at run-time (Data/PlayerBotSpawnProfiles.cfg).
+When the Population Tick runs:
+For each region R → count live bots in registry inside the region bounds.
+If count < min, queue min – count spawn jobs.
+If count > max, flag surplus bots in that region for “retirement” (wander to nearest town gate and delete).
+Spawn jobs are deferred – the director picks an unobtrusive location, creates the bot, assigns its initial schedule and waypoints, then adds it to the region tally.
+3. Travel & schedules (“life simulation‐lite”)
+Each bot gets a very small finite-state machine:
+Idle → Travel → SceneParticipation → Rest → …
+Schedules: a list of BotTask records (destination, time window, activity type). A crafter might get:
+9 am – noon: Smith in Minoc forge.
+noon – 2 pm: Buy ingots in Vesper.
+2 pm – dusk: Travel to Shame and mine.
+Waypoints are pre-baked arrays of points inside Data/Locations/, so pathing is cheap.
+Travelling uses the existing Movement engine but at a slower “world simulation” pulse (e.g. every 2-3 seconds) to avoid CPU spikes.
+4. Scenes (the “fun” part)
+A Scene is a short-lived scripted group event created by the director:
+SceneType.War:
+Pick two factions of bots (PK vs Good, or guild A vs B).
+Spawn them 30–40 tiles apart from the chosen center.
+Mark them mutual aggressors and call BeginAI() (they already have combat AI).
+Send area-wide system message “You hear clashing steel nearby!”
+SceneType.MerchantCaravan:
+3-5 crafter/guard bots + pack horses.
+Path from city gate to another city.
+If real players attack, guards defend; otherwise it just walks and despawns at destination.
+SceneType.BanditAmbush, SceneType.PKPatrol, SceneType.CrafterMarket, …
+The Scene object owns the temporary bots; when it completes it notifies the director, which then re-integrates survivors (or kills leftovers).
+5. Special spawner vs director
+Traditional RunUO Spawner objects are great for fixed mobs, but:
+They do not know about each other (→ easy to over-populate).
+They only track the spawn they emitted, not the global picture.
+They cannot easily do cross-map coordination (wars, caravans).
+Therefore:
+Keep normal Spawner for deer, orcs, etc.
+For PlayerBots use Director-driven dynamic spawning.
+If you still want designer-placed hooks, add a small thin PlayerBotAnchor item: dropped in world, registers itself with the director, telling it “spawns allowed here”. This gives staff geographic control without manual counts.
+6. Performance & persistence
+• Registry is persisted with World.Save() – serialize only lightweight BotSnapshot (serial, map, location, persona, current task).
+At restart the director respawns snapshots using those values.
+Hard cap of global bot count (Core.Config.PlayerBotCap, e.g. 200) and per-tick spawn limit (e.g. < 10).
+Use lazy pathing – bots outside player perception move in “chunks” (teleport 10 tiles every 5 seconds) instead of full tile-by-tile path.
+7. Hooking real players
+• Each time a player enters a region or changes map → director records the timestamp.
+Scene Tick prioritises regions that currently have ≥1 player and haven’t seen a scene for N minutes.
+Use Map.GetSectorRange() so scene spawning happens 2-3 sectors away – close enough that sound/overhead messages lure players, but far enough to avoid instant pop-in.
+8. Extensibility points
+• “Persona templates” already exist – the director can bias spawns: 30 % Adventurer, 20 % Crafter, 50 % PK at night in Felucca.
+Director can expose commands:
+[BotDirectorStatus, [BotDirectorForceScene War, [BotDirectorSetCap 150].
+Can plug‐in new AI packages (e.g. “ShopperAI” that walks between NPC vendors and buys arrows).
+9. Why this beats 500 placed spawners
+1. Centralised control = prevents runaway populations and enables shard-wide balancing.
+More immersive: bots move; players meet them unpredictably.
+Easy to throttle for CPU or memory spikes (director suspends scene creation).
+One place to tweak difficulty, distribution, behaviour.
+Scenes give GMs a lever to create emergent stories without manual setup.
+10. Minimum viable roadmap
+Phase 1 • Director skeleton + registry • basic per-region counts • random wander schedule.
+Phase 2 • Travel waypoints • simple scenes (PK patrol) • serialization.
+Phase 3 • Advanced schedules • caravans & markets • player proximity logic.
+Phase 4 • GM command set • live tuning dashboard • analytics hooks.
+Start small (Phase 1), prove stability, then iterate – all later phases build naturally on the same Director core.
