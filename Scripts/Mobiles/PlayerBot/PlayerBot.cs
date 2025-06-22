@@ -223,41 +223,60 @@ namespace Server.Mobiles
             {
                 case PlayerBotPersona.PlayerBotExperience.Newbie:
                     baseFame = Utility.Random(0, 100);
-                    baseKarma = Utility.Random(-50, 50);
+                    baseKarma = Utility.Random(-75, 75);
                     break;
                 case PlayerBotPersona.PlayerBotExperience.Average:
                     baseFame = Utility.Random(50, 300);
-                    baseKarma = Utility.Random(-100, 100);
+                    baseKarma = Utility.Random(-125, 125);
                     break;
                 case PlayerBotPersona.PlayerBotExperience.Proficient:
                     baseFame = Utility.Random(200, 600);
-                    baseKarma = Utility.Random(-150, 150);
+                    baseKarma = Utility.Random(-175, 175);
                     break;
                 case PlayerBotPersona.PlayerBotExperience.Grandmaster:
                     baseFame = Utility.Random(400, 1000);
-                    baseKarma = Utility.Random(-200, 200);
+                    baseKarma = Utility.Random(-250, 250);
                     break;
             }
             
-            // Adjust based on profile
+            // Adjust based on profile - CRITICAL: Use clear karma thresholds
             switch (m_Persona.Profile)
             {
                 case PlayerBotPersona.PlayerBotProfile.PlayerKiller:
-                    // Player killers always have very negative karma
-                    baseKarma = Utility.Random(-200, -120); // Dread Lord/Lady range
+                    // Player killers always have strongly negative karma (< -25)
+                    baseKarma = Utility.Random(-250, -50); // Ensure they're clearly evil
                     // PKs can have varying fame (infamy)
                     baseFame = Utility.Random(100, 500);
                     break;
                     
                 case PlayerBotPersona.PlayerBotProfile.Crafter:
-                    // Crafters tend to be more neutral to positive
-                    baseKarma = Utility.Random(-50, 100);
+                    // Crafters tend to be neutral to positive, avoid the -25 to 25 gap
+                    if (Utility.RandomBool())
+                    {
+                        baseKarma = Utility.Random(30, 150); // Clearly good
+                    }
+                    else
+                    {
+                        baseKarma = Utility.Random(-20, 20); // Neutral range
+                    }
                     baseFame = Utility.Random(50, 300);
                     break;
                     
                 case PlayerBotPersona.PlayerBotProfile.Adventurer:
-                    // Adventurers can have more varied fame/karma
-                    baseKarma = Utility.Random(-100, 150);
+                    // Adventurers have varied alignment but avoid the neutral gap
+                    int alignmentRoll = Utility.Random(3);
+                    if (alignmentRoll == 0)
+                    {
+                        baseKarma = Utility.Random(30, 200); // Clearly good
+                    }
+                    else if (alignmentRoll == 1)
+                    {
+                        baseKarma = Utility.Random(-20, 20); // Neutral
+                    }
+                    else
+                    {
+                        baseKarma = Utility.Random(-150, -30); // Clearly evil (but not PK level)
+                    }
                     baseFame = Utility.Random(100, 400);
                     break;
             }

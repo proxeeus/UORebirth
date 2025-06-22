@@ -562,13 +562,27 @@ namespace Server.Mobiles
 
             eable.Free();
 
-            // Only assist if the value is high enough (don't assist in minor skirmishes)
+            // Only assist if the value is high enough AND it's not PlayerBot vs PlayerBot combat
             if (bestAssistValue > 50)
             {
                 // Find the enemy of the ally we want to assist
                 Mobile enemyToTarget = FindEnemyOfAlly(bestAssistTarget, observerBot);
                 if (enemyToTarget != null)
                 {
+                    // CRITICAL: Prevent unnecessary PlayerBot vs PlayerBot escalation
+                    PlayerBot enemyBot = enemyToTarget as PlayerBot;
+                    PlayerBot allyBot = bestAssistTarget as PlayerBot;
+                    
+                    if (enemyBot != null && allyBot != null)
+                    {
+                        // Only assist in PlayerBot vs PlayerBot combat if it's clearly justified
+                        if (!IsPlayerBotCombatJustified(allyBot, enemyBot, observerBot))
+                        {
+                            m_Mobile.DebugSay("PlayerBot combat between {0} and {1} - not assisting to prevent escalation", allyBot.Name, enemyBot.Name);
+                            return null;
+                        }
+                    }
+                    
                     m_Mobile.DebugSay("I see combat! I will assist {0} by attacking {1}!", bestAssistTarget.Name, enemyToTarget.Name);
                     return enemyToTarget; // Return the enemy to attack, not the ally
                 }
@@ -619,12 +633,88 @@ namespace Server.Mobiles
             if (!(target is PlayerBot) && !target.Player)
                 return false;
 
-            // Check if this target is an enemy based on alignment
-            bool targetIsGood = IsGoodAligned(target);
-            bool observerIsGood = IsGoodAlignedPlayerBot(observerBot);
+            // CRITICAL: Only PKs should attack other PlayerBots unprovoked
+            PlayerBot targetBot = target as PlayerBot;
+            if (targetBot != null)
+            {
+                // Only PKs can initiate combat with other PlayerBots
+                if (observerBot.PlayerBotProfile != PlayerBotPersona.PlayerBotProfile.PlayerKiller)
+                {
+                    // Non-PKs can only attack if they're defending themselves or allies
+                    return IsDefensiveCombatJustified(target, observerBot);
+                }
+                
+                // PKs can only target good-aligned or neutral bots (not other PKs unless defending)
+                if (targetBot.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.PlayerKiller)
+                {
+                    return IsDefensiveCombatJustified(target, observerBot);
+                }
+                
+                // PKs can attack good-aligned and neutral targets
+                return IsGoodAligned(target) || IsNeutralAligned(target);
+            }
 
-            // Good bots target evil enemies, PKs target good enemies
-            return (targetIsGood && !observerIsGood) || (!targetIsGood && observerIsGood);
+            // For real players, use standard alignment logic
+            bool targetIsGood = IsGoodAligned(target);
+            bool targetIsEvil = IsEvilAligned(target);
+            bool observerIsGood = IsGoodAligned(observerBot);
+            bool observerIsEvil = IsEvilAligned(observerBot);
+
+            // Good bots target evil players, evil bots target good players
+            return (targetIsGood && observerIsEvil) || (targetIsEvil && observerIsGood);
+        }
+
+        private bool IsDefensiveCombatJustified(Mobile target, PlayerBot observerBot)
+        {
+            // Check if the target has recently attacked the observer or their allies
+            foreach (AggressorInfo info in observerBot.Aggressors)
+            {
+                if (info.Attacker == target && !info.Expired)
+                    return true;
+            }
+
+            // Check if the target is attacking an ally that the observer should defend
+            foreach (Mobile ally in observerBot.GetMobilesInRange(12))
+            {
+                if (IsAlly(ally as PlayerBot) && ally.Combatant == target)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private bool IsPlayerBotCombatJustified(PlayerBot ally, PlayerBot enemy, PlayerBot observer)
+        {
+            // Only assist in PlayerBot combat if:
+            // 1. The enemy is a PK attacking a non-PK
+            // 2. The ally was clearly attacked first (has enemy in aggressors list)
+            // 3. There's a significant alignment difference (good vs evil)
+            
+            bool enemyIsPK = enemy.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.PlayerKiller;
+            bool allyIsPK = ally.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.PlayerKiller;
+            
+            // Case 1: PK attacking non-PK - justified to assist the non-PK
+            if (enemyIsPK && !allyIsPK)
+                return true;
+            
+            // Case 2: Check if ally was attacked first
+            foreach (AggressorInfo info in ally.Aggressors)
+            {
+                if (info.Attacker == enemy && !info.Expired)
+                    return true;
+            }
+            
+            // Case 3: Significant alignment difference (good vs evil, not neutral)
+            bool allyIsGood = IsGoodAligned(ally);
+            bool enemyIsEvil = IsEvilAligned(enemy);
+            bool allyIsEvil = IsEvilAligned(ally);
+            bool enemyIsGood = IsGoodAligned(enemy);
+            
+            if ((allyIsGood && enemyIsEvil) || (allyIsEvil && enemyIsGood))
+                return true;
+            
+            // Otherwise, don't assist to prevent escalation
+            return false;
         }
 
         private bool IsValidAssistanceTarget(Mobile target, PlayerBot observerBot)
@@ -645,18 +735,55 @@ namespace Server.Mobiles
 
         private bool ShouldAssistTarget(Mobile target, PlayerBot observerBot)
         {
-            // Determine target alignment
-            bool targetIsGood = IsGoodAligned(target);
-            bool observerIsGood = IsGoodAlignedPlayerBot(observerBot);
+            // PlayerBots should be much more selective about assisting in combat
+            PlayerBot targetBot = target as PlayerBot;
+            if (targetBot != null)
+            {
+                // Only assist other PlayerBots if they share the same profile AND alignment
+                if (targetBot.PlayerBotProfile != observerBot.PlayerBotProfile)
+                    return false;
 
-            // Good bots assist good targets, PKs assist PKs
-            return (targetIsGood && observerIsGood) || (!targetIsGood && !observerIsGood);
+                // PKs assist other PKs
+                if (observerBot.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.PlayerKiller)
+                {
+                    return IsEvilAligned(target) && IsEvilAligned(observerBot);
+                }
+
+                // Non-PKs assist other non-PKs of similar alignment
+                bool targetIsGood = IsGoodAligned(target);
+                bool targetIsNeutral = IsNeutralAligned(target);
+                bool observerIsGood = IsGoodAligned(observerBot);
+                bool observerIsNeutral = IsNeutralAligned(observerBot);
+
+                return (targetIsGood && observerIsGood) || (targetIsNeutral && observerIsNeutral);
+            }
+
+            // For real players, use alignment-based assistance
+            bool playerTargetIsGood = IsGoodAligned(target);
+            bool playerTargetIsEvil = IsEvilAligned(target);
+            bool playerObserverIsGood = IsGoodAligned(observerBot);
+            bool playerObserverIsEvil = IsEvilAligned(observerBot);
+
+            // Good bots assist good players, evil bots assist evil players
+            return (playerTargetIsGood && playerObserverIsGood) || (playerTargetIsEvil && playerObserverIsEvil);
         }
 
         private bool IsGoodAligned(Mobile mobile)
         {
-            // Check if mobile is good-aligned (positive karma)
-            return mobile.Karma > 0;
+            // Standardized karma threshold: > 25 is good, < -25 is evil, between is neutral
+            return mobile.Karma > 25;
+        }
+
+        private bool IsEvilAligned(Mobile mobile)
+        {
+            // Standardized karma threshold: < -25 is evil
+            return mobile.Karma < -25;
+        }
+
+        private bool IsNeutralAligned(Mobile mobile)
+        {
+            // Neutral range: -25 to 25 karma
+            return mobile.Karma >= -25 && mobile.Karma <= 25;
         }
 
         private bool IsInCombat(Mobile mobile)
@@ -823,8 +950,8 @@ namespace Server.Mobiles
 
         private bool IsGoodAlignedPlayerBot(PlayerBot playerBot)
         {
-            // Good-aligned PlayerBots have positive karma
-            return playerBot.Karma > 0;
+            // Use standardized karma threshold for consistency
+            return IsGoodAligned(playerBot);
         }
 
         private bool AquirePlayerKillerTarget(int iRange, bool bPlayerOnly, PlayerBot goodBot)
@@ -1190,30 +1317,9 @@ namespace Server.Mobiles
 
         private bool IsGoodAlignedTarget(Mobile target)
         {
-            // Check if target is good-aligned based on karma
-            // Good-aligned targets have positive karma (Honorable, Noble, Lord/Lady, etc.)
-            if (target.Karma > 0)
-            {
-                // Prioritize higher karma targets (more "good" = more valuable prey)
-                return true;
-            }
-
-            // Also target neutral players (karma = 0) as they're not evil
-            if (target.Karma == 0)
-            {
-                return true;
-            }
-
-            // Don't target other evil players (negative karma) unless they're much less evil
-            // This prevents PlayerKillers from fighting each other unless there's a significant karma difference
-            if (target.Karma < 0 && m_Mobile.Karma < target.Karma)
-            {
-                // Only target if the target is less evil than the PlayerKiller
-                // This creates a hierarchy where more evil PKs hunt less evil ones
-                return true;
-            }
-
-            return false;
+            // Use standardized karma threshold for consistency
+            // PKs should target good-aligned and neutral targets, but not other evil targets
+            return IsGoodAligned(target) || IsNeutralAligned(target);
         }
 
         private bool ShouldCastSpell(Mobile target)
@@ -1989,10 +2095,20 @@ namespace Server.Mobiles
             if (self == null)
                 return false;
 
-            bool selfGood = self.Karma >= 0;
-            bool otherGood = other.Karma >= 0;
+            // Use standardized alignment system
+            bool selfGood = IsGoodAligned(self);
+            bool selfEvil = IsEvilAligned(self);
+            bool selfNeutral = IsNeutralAligned(self);
+            
+            bool otherGood = IsGoodAligned(other);
+            bool otherEvil = IsEvilAligned(other);
+            bool otherNeutral = IsNeutralAligned(other);
 
-            return selfGood == otherGood;
+            // Allies must share the same alignment AND profile
+            bool sameAlignment = (selfGood && otherGood) || (selfEvil && otherEvil) || (selfNeutral && otherNeutral);
+            bool sameProfile = self.PlayerBotProfile == other.PlayerBotProfile;
+
+            return sameAlignment && sameProfile;
         }
     }
 }
