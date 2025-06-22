@@ -14,11 +14,27 @@ namespace Server.Mobiles
         private DateTime m_NextCastTime;
         private Item m_SavedWeapon;
         private Item m_SavedShield;
+        // --- Support/Buff/Dispel ---
+        // Track known active buffs so we don't re-cast too frequently
+        private Dictionary<Mobile, Dictionary<string, DateTime>> m_BuffTracker;
+
+        // Next time we run the support check (buffs / dispels / cures etc.)
+        private DateTime m_NextSupportCheck = DateTime.MinValue;
+
+        // Support behaviour tuning constants
+        private const int SUPPORT_CHECK_INTERVAL = 3; // seconds between support checks (was 2)
+        private const double BUFF_CAST_CHANCE = 0.35; // 35% chance to cast a buff when needed (was 70%)
+        private const double DISPEL_CAST_CHANCE = 0.85; // chance to attempt dispel when viable target exists
+
+        // Throttle how often this bot will cast *any* buff (self or ally)
+        private DateTime m_NextBuffAllowed = DateTime.MinValue;
 
         public PlayerBotAI(BaseCreature m) : base(m)
         {
             m_SavedWeapon = null;
             m_SavedShield = null;
+            m_BuffTracker = new Dictionary<Mobile, Dictionary<string, DateTime>>();
+            m_NextBuffAllowed = DateTime.MinValue;
         }
 
         public override bool Think()
@@ -1249,6 +1265,69 @@ namespace Server.Mobiles
 
         private Spell GetRandomCombatSpell(PlayerBot playerBot, Mobile target)
         {
+            // predeclare spell variable for later use
+            Spell buff = null;
+
+            // ---------------- Support / Buff / Dispel pass ----------------
+            if (DateTime.Now >= m_NextSupportCheck)
+            {
+                m_NextSupportCheck = DateTime.Now + TimeSpan.FromSeconds(SUPPORT_CHECK_INTERVAL);
+
+                // 1) Dispel dangerous enemy summons first (highest priority)
+                Mobile dispelTarget = FindDispelTarget(false);
+                if (dispelTarget != null && playerBot.Mana >= 20 && Utility.RandomDouble() < DISPEL_CAST_CHANCE)
+                {
+                    playerBot.DebugSay("Attempting to dispel {0}", dispelTarget.Name);
+                    return new Server.Spells.Sixth.DispelSpell(playerBot, null);
+                }
+
+                // 2) Buff ourselves first (only if allowed and not in immediate melee range)
+                bool closeCombat = playerBot.InRange(target, 3);
+
+                if (!closeCombat && DateTime.Now >= m_NextBuffAllowed)
+                {
+                    buff = GetBestBuffSpell(playerBot, playerBot);
+                    if (buff != null && Utility.RandomDouble() < BUFF_CAST_CHANCE)
+                    {
+                        m_NextBuffAllowed = DateTime.Now + TimeSpan.FromSeconds(15);
+                        playerBot.DebugSay("Casting self-buff {0}", buff.GetType().Name);
+                        return buff;
+                    }
+                }
+
+                // 3) Buff our control master (owner) if present and close
+                Mobile master = playerBot.ControlMaster;
+                if (master != null && !master.Deleted && playerBot.InRange(master, 6) && DateTime.Now >= m_NextBuffAllowed)
+                {
+                    buff = GetBestBuffSpell(playerBot, master);
+                    if (buff != null && Utility.RandomDouble() < BUFF_CAST_CHANCE)
+                    {
+                        m_NextBuffAllowed = DateTime.Now + TimeSpan.FromSeconds(15);
+                        playerBot.DebugSay("Buffing my owner {0} with {1}", master.Name, buff.GetType().Name);
+                        return buff;
+                    }
+                }
+
+                // 4) Buff allied playerbots nearby (cheap check)
+                foreach (Mobile mob in playerBot.GetMobilesInRange(8))
+                {
+                    PlayerBot ally = mob as PlayerBot;
+                    if (ally == null || ally == playerBot)
+                        continue;
+
+                    if (IsAlly(ally) && DateTime.Now >= m_NextBuffAllowed)
+                    {
+                        buff = GetBestBuffSpell(playerBot, ally);
+                        if (buff != null && Utility.RandomDouble() < BUFF_CAST_CHANCE)
+                        {
+                            m_NextBuffAllowed = DateTime.Now + TimeSpan.FromSeconds(15);
+                            playerBot.DebugSay("Buffing ally {0} with {1}", ally.Name, buff.GetType().Name);
+                            return buff;
+                        }
+                    }
+                }
+            }
+
             if (playerBot.Mana < 8)
             {
                 playerBot.DebugSay("GetRandomCombatSpell: Not enough mana ({0} < 8)", playerBot.Mana);
@@ -1773,6 +1852,122 @@ namespace Server.Mobiles
             // Clear saved references after attempting to equip.
             m_SavedWeapon = null;
             m_SavedShield = null;
+        }
+
+        // -------------------------------------------------
+        //  Buff / Dispel helper logic
+        // -------------------------------------------------
+
+        private bool HasBuff(Mobile mobile, string buffName)
+        {
+            Dictionary<string, DateTime> buffs;
+            if (m_BuffTracker.TryGetValue(mobile, out buffs))
+            {
+                DateTime expiry;
+                if (buffs.TryGetValue(buffName, out expiry))
+                {
+                    if (DateTime.Now < expiry)
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        private void TrackBuff(Mobile mobile, string buffName, TimeSpan duration)
+        {
+            if (!m_BuffTracker.ContainsKey(mobile))
+                m_BuffTracker[mobile] = new Dictionary<string, DateTime>();
+
+            m_BuffTracker[mobile][buffName] = DateTime.Now + duration;
+        }
+
+        private bool NeedsReactiveArmor(Mobile mobile)
+        {
+            return mobile.MeleeDamageAbsorb == 0 && !HasBuff(mobile, "ReactiveArmor");
+        }
+
+        private bool NeedsMagicReflect(Mobile mobile)
+        {
+            return mobile.MagicDamageAbsorb == 0 && !HasBuff(mobile, "MagicReflect");
+        }
+
+        private bool NeedsProtection(Mobile mobile)
+        {
+            return !Server.Spells.Second.ProtectionSpell.Registry.ContainsKey(mobile) && !HasBuff(mobile, "Protection");
+        }
+
+        private bool NeedsStatBuff(Mobile mobile, StatType stat)
+        {
+            StatMod mod = mobile.GetStatMod(string.Format("[Magic] {0} Offset", stat));
+            return mod == null || mod.Offset <= 0;
+        }
+
+        private Spell GetBestBuffSpell(PlayerBot caster, Mobile target)
+        {
+            if (caster == null || target == null)
+                return null;
+
+            // Magery requirement minimal check
+            if (caster.Skills[SkillName.Magery].Base < 10.0)
+                return null;
+
+            // 1) Reactive Armor
+            if (NeedsReactiveArmor(target) && caster.Mana >= 4)
+            {
+                TrackBuff(target, "ReactiveArmor", TimeSpan.FromMinutes(2));
+                return new Server.Spells.First.ReactiveArmorSpell(caster, null);
+            }
+
+            // 2) Protection
+            if (NeedsProtection(target) && caster.Mana >= 6)
+            {
+                TrackBuff(target, "Protection", TimeSpan.FromMinutes(2));
+                return new Server.Spells.Second.ProtectionSpell(caster, null);
+            }
+
+            // 3) Magic Reflect
+            if (NeedsMagicReflect(target) && caster.Mana >= 20)
+            {
+                TrackBuff(target, "MagicReflect", TimeSpan.FromMinutes(2));
+                return new Server.Spells.Fifth.MagicReflectSpell(caster, null);
+            }
+
+            // 4) Simple stat buffs (strength, agility, cunning) for owner/allies only if human
+            if (target.Body.IsHuman && caster.Mana >= 6)
+            {
+                if (NeedsStatBuff(target, StatType.Str))
+                {
+                    TrackBuff(target, "StrBuff", TimeSpan.FromMinutes(1));
+                    return new Server.Spells.Second.StrengthSpell(caster, null);
+                }
+                if (NeedsStatBuff(target, StatType.Dex))
+                {
+                    TrackBuff(target, "DexBuff", TimeSpan.FromMinutes(1));
+                    return new Server.Spells.Second.AgilitySpell(caster, null);
+                }
+                if (NeedsStatBuff(target, StatType.Int))
+                {
+                    TrackBuff(target, "IntBuff", TimeSpan.FromMinutes(1));
+                    return new Server.Spells.Second.CunningSpell(caster, null);
+                }
+            }
+
+            return null;
+        }
+
+        private bool IsAlly(PlayerBot other)
+        {
+            if (other == null)
+                return false;
+
+            PlayerBot self = m_Mobile as PlayerBot;
+            if (self == null)
+                return false;
+
+            bool selfGood = self.Karma >= 0;
+            bool otherGood = other.Karma >= 0;
+
+            return selfGood == otherGood;
         }
     }
 }
