@@ -272,6 +272,16 @@ namespace Server.Engines
                 m_BehaviorSettings.WildernessPlayerKillerPercent = ParseInt(GetValue(persona, "WildernessPlayerKillerPercent", "20"));
             }
 
+            // Scene settings
+            if (sections.ContainsKey("Scenes"))
+            {
+                Dictionary<string, string> scenes = sections["Scenes"];
+                m_BehaviorSettings.AutoSceneCreation = ParseBool(GetValue(scenes, "AutoSceneCreation", "true"));
+                m_BehaviorSettings.SceneTickSeconds = ParseInt(GetValue(scenes, "SceneTickSeconds", "60"));
+                m_BehaviorSettings.MaxActiveScenes = ParseInt(GetValue(scenes, "MaxActiveScenes", "5"));
+                m_BehaviorSettings.SceneCreationChance = ParseInt(GetValue(scenes, "SceneCreationChance", "10"));
+            }
+
             // Debug settings
             if (sections.ContainsKey("Debug"))
             {
@@ -571,6 +581,12 @@ namespace Server.Engines
             public int WildernessCrafterPercent = 30;
             public int WildernessPlayerKillerPercent = 20;
 
+            // Scene Management
+            public bool AutoSceneCreation = true;
+            public int SceneTickSeconds = 60;
+            public int MaxActiveScenes = 5;
+            public int SceneCreationChance = 10;
+            
             // Debug
             public bool EnableLogging = true;
             public bool VerboseSpawning = true;

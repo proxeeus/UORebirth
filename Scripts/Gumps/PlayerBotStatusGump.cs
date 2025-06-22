@@ -14,7 +14,8 @@ namespace Server.Gumps
         BotList,
         RegionDetails,
         Configuration,
-        BotDetails
+        BotDetails,
+        SceneManagement
     }
 
     public class PlayerBotStatusGump : Gump
@@ -114,7 +115,7 @@ namespace Server.Gumps
             AddBackground(0, 0, 750, 700, 5054);
 
             // Navigation panel - taller to fit all buttons properly
-            AddBlackAlpha(10, 10, 180, 140);
+            AddBlackAlpha(10, 10, 180, 165);
             // Main content area - wider and taller
             AddBlackAlpha(200, 10, 540, 640);
             // Notice area - wider to match new size
@@ -125,7 +126,8 @@ namespace Server.Gumps
             AddPageButton(15, 40, GetButtonID(0, 1), "BOT LIST", PlayerBotStatusPage.BotList, PlayerBotStatusPage.BotDetails);
             AddPageButton(15, 65, GetButtonID(0, 2), "REGIONS", PlayerBotStatusPage.RegionDetails);
             AddPageButton(15, 90, GetButtonID(0, 3), "CONFIG", PlayerBotStatusPage.Configuration);
-            AddPageButton(15, 115, GetButtonID(0, 4), "REFRESH", PlayerBotStatusPage.Overview);
+            AddPageButton(15, 115, GetButtonID(0, 4), "SCENES", PlayerBotStatusPage.SceneManagement);
+            AddPageButton(15, 140, GetButtonID(0, 5), "REFRESH", PlayerBotStatusPage.Overview);
 
             if (notice != null)
                 AddHtml(12, 662, 726, 26, Color(notice, LabelColor32), false, false);
@@ -155,6 +157,11 @@ namespace Server.Gumps
                 case PlayerBotStatusPage.BotDetails:
                 {
                     AddBotDetailsPage();
+                    break;
+                }
+                case PlayerBotStatusPage.SceneManagement:
+                {
+                    AddSceneManagementPage();
                     break;
                 }
             }
@@ -435,7 +442,7 @@ namespace Server.Gumps
                     region.Bounds.Y + region.Bounds.Height));
                 
                 // Goto button
-                AddButton(680, y + 20, 4005, 4007, GetButtonID(4, index), GumpButtonType.Reply, 0);
+                AddButton(680, y + 20, 4005, 4007, GetButtonID(5, index), GumpButtonType.Reply, 0);
                 AddHtml(680 + 32, y + 20, 35, 20, Color("Goto", LabelColor32), false, false);
                 
                 y += 70;
@@ -673,6 +680,137 @@ namespace Server.Gumps
             AddButtonLabeled(480, y, GetButtonID(3, 4), "Delete Bot");
         }
 
+        private void AddSceneManagementPage()
+        {
+            PlayerBotDirector director = PlayerBotDirector.Instance;
+            List<PlayerBotScene> activeScenes = director.GetActiveScenes();
+
+            AddHtml(210, 20, 520, 20, Color(Center("Scene Management"), LabelColor32), false, false);
+
+            int y = 50;
+
+            // Scene Statistics
+            AddHtml(210, y, 520, 20, Color(Center("Scene Statistics"), SelectedColor32), false, false);
+            y += 30;
+
+            AddLabel(220, y, LabelHue, "Active Scenes:");
+            AddLabel(400, y, activeScenes.Count > 0 ? GreenHue : LabelHue, activeScenes.Count.ToString());
+            y += 20;
+
+            // Count scenes by type
+            int warScenes = 0;
+            int caravanScenes = 0;
+            foreach (PlayerBotScene scene in activeScenes)
+            {
+                if (scene is Server.Engines.Scenes.WarScene)
+                    warScenes++;
+                else if (scene is Server.Engines.Scenes.MerchantCaravanScene)
+                    caravanScenes++;
+            }
+
+            AddLabel(220, y, LabelHue, "War Scenes:");
+            AddLabel(400, y, warScenes > 0 ? RedHue : LabelHue, warScenes.ToString());
+            y += 20;
+
+            AddLabel(220, y, LabelHue, "Caravan Scenes:");
+            AddLabel(400, y, caravanScenes > 0 ? BlueHue : LabelHue, caravanScenes.ToString());
+            y += 30;
+
+            // Scene Creation
+            AddHtml(210, y, 520, 20, Color(Center("Create New Scene"), SelectedColor32), false, false);
+            y += 30;
+
+            AddButtonLabeled(220, y, GetButtonID(4, 0), "Create War Scene");
+            AddButtonLabeled(380, y, GetButtonID(4, 1), "Create Caravan Scene");
+            y += 30;
+
+            // Active Scenes List
+            AddHtml(210, y, 520, 20, Color(Center("Active Scenes"), SelectedColor32), false, false);
+            y += 30;
+
+            if (activeScenes.Count == 0)
+            {
+                AddLabel(220, y, DisabledColor32, "No active scenes");
+                y += 20;
+            }
+            else
+            {
+                // Table headers
+                AddLabel(220, y, LabelHue, "ID");
+                AddLabel(250, y, LabelHue, "Type");
+                AddLabel(320, y, LabelHue, "State");
+                AddLabel(380, y, LabelHue, "Participants");
+                AddLabel(470, y, LabelHue, "Duration");
+                AddLabel(540, y, LabelHue, "Actions");
+                y += 20;
+
+                // Scene list (limited to fit in view)
+                int maxScenes = Math.Min(activeScenes.Count, 15);
+                for (int i = 0; i < maxScenes; i++)
+                {
+                    PlayerBotScene scene = activeScenes[i];
+                    string sceneType = scene.GetType().Name.Replace("Scene", "");
+                    int participants = scene.GetParticipantCount();
+                    double duration = (DateTime.Now - scene.StartTime).TotalSeconds;
+
+                    // Scene ID
+                    AddLabel(220, y, LabelHue, scene.SceneId.ToString());
+
+                    // Scene Type with color coding
+                    int typeHue = sceneType == "War" ? RedHue : (sceneType == "MerchantCaravan" ? BlueHue : LabelHue);
+                    AddLabel(250, y, typeHue, sceneType);
+
+                    // State
+                    int stateHue = scene.CurrentState == PlayerBotScene.SceneState.Active ? GreenHue : YellowHue;
+                    AddLabel(320, y, stateHue, scene.CurrentState.ToString());
+
+                    // Participants
+                    AddLabel(400, y, participants > 0 ? GreenHue : RedHue, participants.ToString());
+
+                    // Duration
+                    string durationStr = duration < 60 ? String.Format("{0:F0}s", duration) : 
+                                        duration < 3600 ? String.Format("{0:F1}m", duration / 60) :
+                                        String.Format("{0:F1}h", duration / 3600);
+                    AddLabel(470, y, LabelHue, durationStr);
+
+                    // Action buttons
+                    AddButton(540, y - 1, 4005, 4007, GetButtonID(4, 10 + i), GumpButtonType.Reply, 0);
+                    AddLabel(575, y, LabelHue, "Info");
+
+                    AddButton(610, y - 1, 4005, 4007, GetButtonID(4, 50 + i), GumpButtonType.Reply, 0);
+                    AddLabel(645, y, RedHue, "End");
+
+                    y += 20;
+                }
+
+                if (activeScenes.Count > maxScenes)
+                {
+                    AddLabel(220, y, DisabledColor32, String.Format("... and {0} more scenes", activeScenes.Count - maxScenes));
+                    y += 20;
+                }
+            }
+
+            y += 20;
+
+            // Global Scene Actions
+            AddHtml(210, y, 520, 20, Color(Center("Global Actions"), SelectedColor32), false, false);
+            y += 30;
+
+            AddButtonLabeled(220, y, GetButtonID(4, 2), "End All Scenes");
+            AddButtonLabeled(380, y, GetButtonID(4, 3), "Refresh List");
+            y += 30;
+
+            // Scene Configuration (if we want to add this later)
+            AddHtml(210, y, 520, 20, Color(Center("Scene Configuration"), SelectedColor32), false, false);
+            y += 30;
+
+            AddLabel(220, y, LabelHue, "Auto-Scene Creation:");
+            AddLabel(400, y, director.AutoSceneCreation ? GreenHue : RedHue, director.AutoSceneCreation ? "Enabled" : "Disabled");
+            y += 20;
+
+            AddButtonLabeled(220, y, GetButtonID(4, 4), director.AutoSceneCreation ? "Disable Auto-Scenes" : "Enable Auto-Scenes");
+        }
+
         #region Helper Methods
 
         private Dictionary<string, int> GetBotsPerRegion()
@@ -761,6 +899,99 @@ namespace Server.Gumps
             return "Free";
         }
 
+        private Point3D FindCaravanDestination(Point3D start, Map map)
+        {
+            // Try to find a suitable destination from the available regions
+            List<PlayerBotConfigurationManager.RegionConfig> possibleDestinations = new List<PlayerBotConfigurationManager.RegionConfig>();
+            
+            foreach (PlayerBotConfigurationManager.RegionConfig region in PlayerBotConfigurationManager.Regions.Values)
+            {
+                if (region.Active && region.Map == map)
+                {
+                    // Calculate distance
+                    Point3D regionCenter = new Point3D(
+                        (region.Bounds.X + region.Bounds.Width / 2),
+                        (region.Bounds.Y + region.Bounds.Height / 2),
+                        0);
+                    
+                    double distance = Math.Sqrt(Math.Pow(start.X - regionCenter.X, 2) + Math.Pow(start.Y - regionCenter.Y, 2));
+                    
+                    // Only consider destinations that are reasonably far away (at least 50 tiles)
+                    if (distance >= 50 && distance <= 200)
+                    {
+                        possibleDestinations.Add(region);
+                    }
+                }
+            }
+            
+            if (possibleDestinations.Count > 0)
+            {
+                PlayerBotConfigurationManager.RegionConfig chosen = possibleDestinations[Utility.Random(possibleDestinations.Count)];
+                return new Point3D(
+                    chosen.Bounds.X + chosen.Bounds.Width / 2,
+                    chosen.Bounds.Y + chosen.Bounds.Height / 2,
+                    0);
+            }
+            
+            // Fallback: create a destination some distance away
+            int angle = Utility.Random(360);
+            int fallbackDistance = Utility.RandomMinMax(75, 150);
+            
+            int x = start.X + (int)(Math.Cos(angle * Math.PI / 180) * fallbackDistance);
+            int y = start.Y + (int)(Math.Sin(angle * Math.PI / 180) * fallbackDistance);
+            
+            return new Point3D(x, y, start.Z);
+        }
+
+        private void ShowSceneInfo(Mobile from, PlayerBotScene scene)
+        {
+            string sceneType = scene.GetType().Name.Replace("Scene", "");
+            
+            from.SendMessage(0x35, "=== Scene {0} Information ===", scene.SceneId);
+            from.SendMessage("Type: {0}", sceneType);
+            from.SendMessage("State: {0}", scene.CurrentState);
+            from.SendMessage("Location: {0} ({1})", scene.CenterLocation, scene.Map);
+            from.SendMessage("Start Time: {0:yyyy-MM-dd HH:mm:ss}", scene.StartTime);
+            from.SendMessage("Duration: {0:F1}s", (DateTime.Now - scene.StartTime).TotalSeconds);
+            from.SendMessage("Participants: {0}", scene.GetParticipantCount());
+            
+            // List participants
+            List<PlayerBot> participants = scene.GetParticipants();
+            if (participants.Count > 0)
+            {
+                from.SendMessage("Participant List:");
+                foreach (PlayerBot bot in participants)
+                {
+                    if (bot != null && !bot.Deleted)
+                    {
+                        string status = bot.Alive ? "Alive" : "Dead";
+                        string combatStatus = bot.Combatant != null ? " (Fighting)" : "";
+                        from.SendMessage("  - {0} ({1}){2}", bot.Name, status, combatStatus);
+                    }
+                }
+            }
+            
+            // Scene-specific details
+            if (scene is Server.Engines.Scenes.WarScene)
+            {
+                Server.Engines.Scenes.WarScene warScene = scene as Server.Engines.Scenes.WarScene;
+                from.SendMessage("=== War Scene Details ===");
+                from.SendMessage("War Type: {0}", warScene.WarType);
+                from.SendMessage("Faction A: {0} members", warScene.GetFactionACount());
+                from.SendMessage("Faction B: {0} members", warScene.GetFactionBCount());
+            }
+            else if (scene is Server.Engines.Scenes.MerchantCaravanScene)
+            {
+                Server.Engines.Scenes.MerchantCaravanScene caravanScene = scene as Server.Engines.Scenes.MerchantCaravanScene;
+                from.SendMessage("=== Caravan Scene Details ===");
+                from.SendMessage("Start Location: {0}", caravanScene.CenterLocation);
+                from.SendMessage("Destination: {0}", caravanScene.Destination);
+                from.SendMessage("Progress: {0:F1}%", caravanScene.GetProgress() * 100);
+                from.SendMessage("Merchants: {0}", caravanScene.GetMerchantCount());
+                from.SendMessage("Guards: {0}", caravanScene.GetGuardCount());
+            }
+        }
+
         #endregion
 
         public override void OnResponse(NetState sender, RelayInfo info)
@@ -788,7 +1019,8 @@ namespace Server.Gumps
                         case 1: page = PlayerBotStatusPage.BotList; break;
                         case 2: page = PlayerBotStatusPage.RegionDetails; break;
                         case 3: page = PlayerBotStatusPage.Configuration; break;
-                        case 4: // Refresh
+                        case 4: page = PlayerBotStatusPage.SceneManagement; break;
+                        case 5: // Refresh
                             page = m_PageType;
                             notice = "Data refreshed.";
                             break;
@@ -863,7 +1095,121 @@ namespace Server.Gumps
                     }
                     break;
                 }
-                case 4: // Go To Region
+                case 4: // Scene Management
+                {
+                    PlayerBotDirector director = PlayerBotDirector.Instance;
+                    List<PlayerBotScene> activeScenes = director.GetActiveScenes();
+                    string notice = null;
+
+                    switch (index)
+                    {
+                        case 0: // Create War Scene
+                            try
+                            {
+                                PlayerBotScene warScene = new Server.Engines.Scenes.WarScene(from.Location, from.Map, 8);
+                                warScene.Initialize(); // Initialize to spawn participants
+                                director.AddScene(warScene);
+                                notice = String.Format("War scene created with ID {0} at your location with {1} participants.", warScene.SceneId, warScene.GetParticipantCount());
+                            }
+                            catch (Exception ex)
+                            {
+                                notice = "Error creating war scene: " + ex.Message;
+                            }
+                            break;
+
+                        case 1: // Create Caravan Scene
+                            try
+                            {
+                                // Find a suitable destination for the caravan
+                                Point3D destination = FindCaravanDestination(from.Location, from.Map);
+                                if (destination == Point3D.Zero)
+                                {
+                                    notice = "Could not find a suitable destination for the caravan from this location.";
+                                }
+                                else
+                                {
+                                    PlayerBotScene caravanScene = new Server.Engines.Scenes.MerchantCaravanScene(from.Location, destination, from.Map);
+                                    caravanScene.Initialize(); // Initialize to spawn participants
+                                    director.AddScene(caravanScene);
+                                    notice = String.Format("Caravan scene created with ID {0} at your location with {1} participants.", caravanScene.SceneId, caravanScene.GetParticipantCount());
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                notice = "Error creating caravan scene: " + ex.Message;
+                            }
+                            break;
+
+                        case 2: // End All Scenes
+                            try
+                            {
+                                int endedCount = 0;
+                                foreach (PlayerBotScene scene in activeScenes)
+                                {
+                                    scene.ForceEnd();
+                                    endedCount++;
+                                }
+                                notice = String.Format("Ended {0} scene(s).", endedCount);
+                            }
+                            catch (Exception ex)
+                            {
+                                notice = "Error ending scenes: " + ex.Message;
+                            }
+                            break;
+
+                        case 3: // Refresh List
+                            notice = "Scene list refreshed.";
+                            break;
+
+                        case 4: // Toggle Auto-Scene Creation
+                            try
+                            {
+                                director.AutoSceneCreation = !director.AutoSceneCreation;
+                                notice = String.Format("Auto-scene creation {0}.", director.AutoSceneCreation ? "enabled" : "disabled");
+                            }
+                            catch (Exception ex)
+                            {
+                                notice = "Error toggling auto-scene creation: " + ex.Message;
+                            }
+                            break;
+
+                        default:
+                            // Handle scene info buttons (10-24) and end scene buttons (50-64)
+                            if (index >= 10 && index < 25)
+                            {
+                                int sceneIndex = index - 10;
+                                if (sceneIndex < activeScenes.Count)
+                                {
+                                    PlayerBotScene scene = activeScenes[sceneIndex];
+                                    ShowSceneInfo(from, scene);
+                                    return; // Don't refresh the main gump
+                                }
+                            }
+                            else if (index >= 50 && index < 65)
+                            {
+                                int sceneIndex = index - 50;
+                                if (sceneIndex < activeScenes.Count)
+                                {
+                                    try
+                                    {
+                                        PlayerBotScene scene = activeScenes[sceneIndex];
+                                        string sceneType = scene.GetType().Name.Replace("Scene", "");
+                                        scene.ForceEnd();
+                                        notice = String.Format("Ended {0} scene {1}.", sceneType, scene.SceneId);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        notice = "Error ending scene: " + ex.Message;
+                                    }
+                                }
+                            }
+                            break;
+                    }
+
+                    from.SendGump(new PlayerBotStatusGump(from, PlayerBotStatusPage.SceneManagement, 0, null, notice, null));
+                    break;
+                }
+                case 5: // Go To Region
                 {
                     if (m_List != null && index >= 0 && index < m_List.Count)
                     {

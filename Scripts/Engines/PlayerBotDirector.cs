@@ -84,7 +84,7 @@ namespace Server.Engines
         /// <summary>
         /// Region profile for population management
         /// </summary>
-        private class RegionProfile
+        public class RegionProfile
         {
             private string _name;
             private Map _map;
@@ -129,8 +129,10 @@ namespace Server.Engines
         #region Private Fields
         private Timer m_Timer;
         private Timer m_BehaviorTimer; // Phase 2: Behavior management timer
+        private Timer m_SceneTimer; // Phase 2: Scene management timer
         private List<RegionProfile> m_Regions;
         private List<PointOfInterest> m_PointsOfInterest; // Phase 2: Notable locations
+        private List<PlayerBotScene> m_ActiveScenes; // Phase 2: Dynamic scenes
         
         // Bot registry for efficient tracking
         private Dictionary<Serial, PlayerBotInfo> m_RegisteredBots;
@@ -151,6 +153,7 @@ namespace Server.Engines
             m_Regions = new List<RegionProfile>();
             m_RegisteredBots = new Dictionary<Serial, PlayerBotInfo>();
             m_PointsOfInterest = new List<PointOfInterest>();
+            m_ActiveScenes = new List<PlayerBotScene>();
             
             // Load regions and POIs from configuration files
             LoadRegionsFromConfig();
@@ -161,6 +164,9 @@ namespace Server.Engines
             
             // Phase 2: Behavior management timer (starts a bit later to let population stabilize)
             m_BehaviorTimer = Timer.DelayCall(TimeSpan.FromSeconds(Config.StartupDelaySeconds + 15), TimeSpan.FromSeconds(Config.BehaviorTickSeconds), new TimerCallback(OnBehaviorTick));
+            
+            // Phase 2: Scene management timer (starts even later to allow behaviors to establish)
+            m_SceneTimer = Timer.DelayCall(TimeSpan.FromSeconds(Config.StartupDelaySeconds + 30), TimeSpan.FromSeconds(60), new TimerCallback(OnSceneTick));
             
             if (Config.EnableLogging)
             {
@@ -373,7 +379,7 @@ namespace Server.Engines
         /// <summary>
         /// Update bot info (thread-safe)
         /// </summary>
-        private void UpdateBotInfo(PlayerBot bot, BotBehaviorState newState, Point3D destination)
+        public void UpdateBotInfo(PlayerBot bot, BotBehaviorState newState, Point3D destination)
         {
             lock (m_RegistryLock)
             {
@@ -1554,6 +1560,394 @@ namespace Server.Engines
                 Console.WriteLine("[{0}] [PlayerBotDirector] Bot response: '{1}' -> '{2}': \"{3}\"", 
                     GetTimestamp(), responder.Name, initiator.Name, response);
         }
+        #endregion
+
+        #region Scene Management (Phase 2)
+        /// <summary>
+        /// Scene management tick - creates and manages dynamic scenes
+        /// </summary>
+        private void OnSceneTick()
+        {
+            try
+            {
+                // Update existing scenes
+                UpdateActiveScenes();
+                
+                // Clean up completed scenes
+                CleanupCompletedScenes();
+                
+                // Consider creating new scenes
+                ConsiderNewScenes();
+                
+                if (Config.EnableLogging && Config.VerboseEvents && m_ActiveScenes.Count > 0)
+                {
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Scene tick: {1} active scenes", 
+                        GetTimestamp(), m_ActiveScenes.Count);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[{0}] [PlayerBotDirector] Error in scene tick: {1}", GetTimestamp(), ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Update all active scenes
+        /// </summary>
+        private void UpdateActiveScenes()
+        {
+            foreach (PlayerBotScene scene in m_ActiveScenes)
+            {
+                if (scene != null && !scene.IsComplete)
+                {
+                    scene.Update();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Remove completed scenes from the active list
+        /// </summary>
+        private void CleanupCompletedScenes()
+        {
+            for (int i = m_ActiveScenes.Count - 1; i >= 0; i--)
+            {
+                PlayerBotScene scene = m_ActiveScenes[i];
+                if (scene == null || scene.IsComplete)
+                {
+                    m_ActiveScenes.RemoveAt(i);
+                    
+                    if (Config.EnableLogging && Config.VerboseEvents && scene != null)
+                    {
+                        Console.WriteLine("[{0}] [PlayerBotDirector] Scene '{1}' completed and removed", 
+                            GetTimestamp(), scene.Name);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Consider creating new scenes based on current conditions
+        /// </summary>
+        private void ConsiderNewScenes()
+        {
+            // Don't create too many scenes at once
+            if (m_ActiveScenes.Count >= Config.MaxActiveScenes)
+                return;
+
+            // Random chance to create a scene
+            if (Utility.Random(100) >= Config.DynamicEventChance)
+                return;
+
+            // Try to create a scene in a random region
+            if (m_Regions.Count == 0)
+                return;
+
+            RegionProfile region = m_Regions[Utility.Random(m_Regions.Count)];
+            if (region == null)
+                return;
+
+            // Get nearby players to determine if scene should require them
+            List<Mobile> nearbyPlayers = GetPlayersInRegion(region);
+            
+            // Try different scene types
+            PlayerBotScene newScene = TryCreateScene(region, nearbyPlayers);
+            if (newScene != null)
+            {
+                // Use AddScene to properly initialize and start the scene
+                AddScene(newScene);
+                
+                if (Config.EnableLogging && Config.VerboseEvents)
+                {
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Created new scene: '{1}' in {2}", 
+                        GetTimestamp(), newScene.Name, region.Name);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Try to create a scene of a random type
+        /// </summary>
+        private PlayerBotScene TryCreateScene(RegionProfile region, List<Mobile> nearbyPlayers)
+        {
+            // Determine scene type based on region and conditions
+            PlayerBotScene.SceneType[] possibleScenes = GetPossibleSceneTypes(region, nearbyPlayers);
+            
+            if (possibleScenes.Length == 0)
+                return null;
+
+            PlayerBotScene.SceneType sceneType = possibleScenes[Utility.Random(possibleScenes.Length)];
+            
+            // Create scene based on type
+            switch (sceneType)
+            {
+                case PlayerBotScene.SceneType.War:
+                    return TryCreateWarScene(region, nearbyPlayers);
+                    
+                case PlayerBotScene.SceneType.MerchantCaravan:
+                    return TryCreateMerchantCaravanScene(region, nearbyPlayers);
+                    
+                // Add other scene types here as they're implemented
+                
+                default:
+                    return null;
+            }
+        }
+
+        /// <summary>
+        /// Get possible scene types for a region
+        /// </summary>
+        private PlayerBotScene.SceneType[] GetPossibleSceneTypes(RegionProfile region, List<Mobile> nearbyPlayers)
+        {
+            List<PlayerBotScene.SceneType> possible = new List<PlayerBotScene.SceneType>();
+            
+            // War scenes - only in wilderness/dangerous areas (no player requirement)
+            if (region.SafetyLevel != PlayerBotConfigurationManager.SafetyLevel.Safe)
+            {
+                possible.Add(PlayerBotScene.SceneType.War);
+            }
+            
+            // Merchant caravans - can happen anywhere with enough space
+            if (region.Area.Width >= 50 && region.Area.Height >= 50)
+            {
+                possible.Add(PlayerBotScene.SceneType.MerchantCaravan);
+            }
+            
+            return possible.ToArray();
+        }
+
+        /// <summary>
+        /// Try to create a war scene
+        /// </summary>
+        private PlayerBotScene TryCreateWarScene(RegionProfile region, List<Mobile> nearbyPlayers)
+        {
+            // Find a good location for the battle
+            Point3D center = FindSceneLocation(region);
+            if (center == Point3D.Zero)
+                return null;
+
+            try
+            {
+                Server.Engines.Scenes.WarScene warScene = new Server.Engines.Scenes.WarScene(center, region.Map);
+                
+                if (warScene.CanTrigger(region, nearbyPlayers))
+                {
+                    return warScene;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[PlayerBotDirector] Error creating war scene: {0}", ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Try to create a merchant caravan scene
+        /// </summary>
+        private PlayerBotScene TryCreateMerchantCaravanScene(RegionProfile region, List<Mobile> nearbyPlayers)
+        {
+            // Find start and destination points
+            Point3D start = FindSceneLocation(region);
+            if (start == Point3D.Zero)
+                return null;
+
+            // Find a destination in another region or far away in the same region
+            Point3D destination = FindCaravanDestination(region, start);
+            if (destination == Point3D.Zero)
+                return null;
+
+            try
+            {
+                Server.Engines.Scenes.MerchantCaravanScene caravanScene = new Server.Engines.Scenes.MerchantCaravanScene(start, destination, region.Map);
+                
+                if (caravanScene.CanTrigger(region, nearbyPlayers))
+                {
+                    return caravanScene;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[PlayerBotDirector] Error creating caravan scene: {0}", ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Find a suitable location for a scene within a region
+        /// </summary>
+        private Point3D FindSceneLocation(RegionProfile region)
+        {
+            for (int i = 0; i < 10; i++) // Try up to 10 times
+            {
+                int x = Utility.RandomMinMax(region.Area.X, region.Area.X + region.Area.Width);
+                int y = Utility.RandomMinMax(region.Area.Y, region.Area.Y + region.Area.Height);
+                int z = region.Map.GetAverageZ(x, y);
+                Point3D p = new Point3D(x, y, z);
+
+                if (region.Map.CanSpawnMobile(p.X, p.Y, p.Z))
+                    return p;
+            }
+
+            return Point3D.Zero;
+        }
+
+        /// <summary>
+        /// Find a destination for a merchant caravan
+        /// </summary>
+        private Point3D FindCaravanDestination(RegionProfile startRegion, Point3D start)
+        {
+            // Try to find a destination in another region first
+            foreach (RegionProfile otherRegion in m_Regions)
+            {
+                if (otherRegion != startRegion && otherRegion.Map == startRegion.Map)
+                {
+                    Point3D dest = FindSceneLocation(otherRegion);
+                    if (dest != Point3D.Zero)
+                    {
+                        // Make sure it's far enough away
+                        double distance = Math.Sqrt(Math.Pow(start.X - dest.X, 2) + Math.Pow(start.Y - dest.Y, 2));
+                        if (distance >= 100) // At least 100 tiles away
+                        {
+                            return dest;
+                        }
+                    }
+                }
+            }
+
+            // If no other region works, find a distant point in the same region
+            for (int i = 0; i < 5; i++)
+            {
+                int x = Utility.RandomMinMax(startRegion.Area.X, startRegion.Area.X + startRegion.Area.Width);
+                int y = Utility.RandomMinMax(startRegion.Area.Y, startRegion.Area.Y + startRegion.Area.Height);
+                int z = startRegion.Map.GetAverageZ(x, y);
+                Point3D p = new Point3D(x, y, z);
+
+                double distance = Math.Sqrt(Math.Pow(start.X - p.X, 2) + Math.Pow(start.Y - p.Y, 2));
+                if (distance >= 50 && startRegion.Map.CanSpawnMobile(p.X, p.Y, p.Z))
+                {
+                    return p;
+                }
+            }
+
+            return Point3D.Zero;
+        }
+
+        /// <summary>
+        /// Get all players in a region
+        /// </summary>
+        private List<Mobile> GetPlayersInRegion(RegionProfile region)
+        {
+            List<Mobile> players = new List<Mobile>();
+            
+            foreach (Server.Network.NetState ns in Server.Network.NetState.Instances)
+            {
+                if (ns.Mobile != null && ns.Mobile.Player && ns.Mobile.Map == region.Map)
+                {
+                    if (region.Area.Contains(ns.Mobile.Location))
+                    {
+                        players.Add(ns.Mobile);
+                    }
+                }
+            }
+            
+            return players;
+        }
+
+        /// <summary>
+        /// Get count of active scenes by type
+        /// </summary>
+        public int GetActiveSceneCount(PlayerBotScene.SceneType? type = null)
+        {
+            if (type == null)
+                return m_ActiveScenes.Count;
+                
+            int count = 0;
+            foreach (PlayerBotScene scene in m_ActiveScenes)
+            {
+                if (scene != null && scene.Type == type.Value)
+                    count++;
+            }
+            return count;
+        }
+
+        /// <summary>
+        /// Get list of active scenes (for admin commands)
+        /// </summary>
+        public List<PlayerBotScene> GetActiveScenes()
+        {
+            return new List<PlayerBotScene>(m_ActiveScenes);
+        }
+
+        /// <summary>
+        /// Get a specific scene by ID
+        /// </summary>
+        public PlayerBotScene GetSceneById(int sceneId)
+        {
+            lock (m_ActiveScenes)
+            {
+                foreach (PlayerBotScene scene in m_ActiveScenes)
+                {
+                    if (scene.SceneId == sceneId)
+                        return scene;
+                }
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Add a scene to the active scenes list and start it
+        /// </summary>
+        public void AddScene(PlayerBotScene scene)
+        {
+            if (scene == null)
+                return;
+
+            lock (m_ActiveScenes)
+            {
+                m_ActiveScenes.Add(scene);
+            }
+
+            try
+            {
+                scene.Start();
+                if (PlayerBotConfigurationManager.BehaviorSettings.EnableLogging)
+                {
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Scene {1} ({2}) started at {3}", 
+                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), scene.SceneId, scene.GetType().Name.Replace("Scene", ""), scene.CenterLocation);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (PlayerBotConfigurationManager.BehaviorSettings.EnableLogging)
+                {
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Error starting scene {1}: {2}", 
+                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), scene.SceneId, ex.Message);
+                }
+                lock (m_ActiveScenes)
+                {
+                    m_ActiveScenes.Remove(scene);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Auto-scene creation enabled/disabled
+        /// </summary>
+        public bool AutoSceneCreation
+        {
+            get { return Config.AutoSceneCreation; }
+            set { Config.AutoSceneCreation = value; }
+        }
+
         #endregion
     }
 } 
