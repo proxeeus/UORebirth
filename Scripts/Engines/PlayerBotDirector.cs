@@ -17,14 +17,24 @@ namespace Server.Engines
         public static PlayerBotDirector Instance { get { return m_Instance; } }
         #endregion
 
+        #region Configuration Constants
         private const int GLOBAL_CAP = 200;            // Absolute maximum bots allowed shard-wide
         private const int POPULATION_TICK_SECONDS = 30; // How often to evaluate population
-
+        private const int SPAWN_LOCATION_ATTEMPTS = 20; // Max attempts to find spawn location
+        private const int STARTUP_DELAY_SECONDS = 10;   // Delay before first population tick
+        
         // Debug toggle - set to false to disable verbose logging
         private static bool DEBUG_ENABLED = true;
+        #endregion
 
+        #region Private Fields
         private Timer m_Timer;
         private List<RegionProfile> m_Regions;
+        
+        // Bot registry for efficient tracking
+        private Dictionary<Serial, PlayerBotInfo> m_RegisteredBots;
+        private object m_RegistryLock = new object();
+        #endregion
 
         // Helper method to get formatted timestamp for logging
         private static string GetTimestamp()
@@ -35,13 +45,14 @@ namespace Server.Engines
         private PlayerBotDirector()
         {
             m_Regions = new List<RegionProfile>();
+            m_RegisteredBots = new Dictionary<Serial, PlayerBotInfo>();
             SeedDefaultRegions();
 
             // Delay a few seconds after server start, then tick regularly.
-            m_Timer = Timer.DelayCall(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(POPULATION_TICK_SECONDS), new TimerCallback(OnPopulationTick));
+            m_Timer = Timer.DelayCall(TimeSpan.FromSeconds(STARTUP_DELAY_SECONDS), TimeSpan.FromSeconds(POPULATION_TICK_SECONDS), new TimerCallback(OnPopulationTick));
             
             if (DEBUG_ENABLED)
-                Console.WriteLine("[{0}] [PlayerBotDirector] Constructor completed. Timer will start in 10 seconds, then tick every {1} seconds.", GetTimestamp(), POPULATION_TICK_SECONDS);
+                Console.WriteLine("[{0}] [PlayerBotDirector] Constructor completed. Timer will start in {1} seconds, then tick every {2} seconds.", GetTimestamp(), STARTUP_DELAY_SECONDS, POPULATION_TICK_SECONDS);
         }
 
         [CallPriority(int.MaxValue)]
@@ -51,6 +62,125 @@ namespace Server.Engines
             PlayerBotDirector unused = Instance;
             Console.WriteLine("[{0}] [PlayerBotDirector] Initialized (phase 1) - Debug mode: {1}", GetTimestamp(), DEBUG_ENABLED ? "ON" : "OFF");
         }
+
+        #region Bot Registration System
+        /// <summary>
+        /// Called when a PlayerBot is created/spawned to register it with the director
+        /// </summary>
+        public void RegisterBot(PlayerBot bot)
+        {
+            if (bot == null || bot.Deleted)
+                return;
+
+            lock (m_RegistryLock)
+            {
+                PlayerBotInfo info = new PlayerBotInfo(bot);
+                m_RegisteredBots[bot.Serial] = info;
+                
+                if (DEBUG_ENABLED)
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Registered bot '{1}' (Serial: {2}) - Total registered: {3}", 
+                        GetTimestamp(), bot.Name, bot.Serial, m_RegisteredBots.Count);
+            }
+        }
+
+        /// <summary>
+        /// Called when a PlayerBot is deleted/dies to unregister it from the director
+        /// </summary>
+        public void UnregisterBot(PlayerBot bot)
+        {
+            if (bot == null)
+                return;
+
+            lock (m_RegistryLock)
+            {
+                if (m_RegisteredBots.ContainsKey(bot.Serial))
+                {
+                    PlayerBotInfo info = m_RegisteredBots[bot.Serial];
+                    TimeSpan lifespan = DateTime.Now - info.SpawnTime;
+                    m_RegisteredBots.Remove(bot.Serial);
+                    
+                    if (DEBUG_ENABLED)
+                        Console.WriteLine("[{0}] [PlayerBotDirector] Unregistered bot '{1}' (Serial: {2}) - Lived for {3} - Total registered: {4}", 
+                            GetTimestamp(), bot.Name, bot.Serial, FormatTimeSpan(lifespan), m_RegisteredBots.Count);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Get current registered bot count (thread-safe)
+        /// </summary>
+        public int GetRegisteredBotCount()
+        {
+            lock (m_RegistryLock)
+            {
+                return m_RegisteredBots.Count;
+            }
+        }
+
+        /// <summary>
+        /// Get registered bots in a specific region (thread-safe)
+        /// </summary>
+        private List<PlayerBot> GetBotsInRegion(RegionProfile profile)
+        {
+            List<PlayerBot> result = new List<PlayerBot>();
+            
+            lock (m_RegistryLock)
+            {
+                foreach (PlayerBotInfo info in m_RegisteredBots.Values)
+                {
+                    PlayerBot bot = info.Bot;
+                    if (bot != null && !bot.Deleted && bot.Map == profile.Map && profile.Area.Contains(bot.Location))
+                    {
+                        result.Add(bot);
+                    }
+                }
+            }
+            
+            return result;
+        }
+
+        /// <summary>
+        /// Clean up any stale bot registrations (bots that were deleted without proper unregistration)
+        /// </summary>
+        private void CleanupStaleRegistrations()
+        {
+            List<Serial> toRemove = new List<Serial>();
+            
+            lock (m_RegistryLock)
+            {
+                foreach (KeyValuePair<Serial, PlayerBotInfo> kvp in m_RegisteredBots)
+                {
+                    if (kvp.Value.Bot == null || kvp.Value.Bot.Deleted)
+                    {
+                        toRemove.Add(kvp.Key);
+                    }
+                }
+                
+                foreach (Serial serial in toRemove)
+                {
+                    PlayerBotInfo info = m_RegisteredBots[serial];
+                    TimeSpan lifespan = DateTime.Now - info.SpawnTime;
+                    m_RegisteredBots.Remove(serial);
+                    
+                    if (DEBUG_ENABLED)
+                        Console.WriteLine("[{0}] [PlayerBotDirector] Cleaned up stale registration (Serial: {1}) - Lived for {2} - Total registered: {3}", 
+                            GetTimestamp(), serial, FormatTimeSpan(lifespan), m_RegisteredBots.Count);
+                }
+            }
+        }
+
+        private string FormatTimeSpan(TimeSpan span)
+        {
+            if (span.TotalDays >= 1)
+                return string.Format("{0}d {1}h {2}m", (int)span.TotalDays, span.Hours, span.Minutes);
+            else if (span.TotalHours >= 1)
+                return string.Format("{0}h {1}m {2}s", span.Hours, span.Minutes, span.Seconds);
+            else if (span.TotalMinutes >= 1)
+                return string.Format("{0}m {1}s", span.Minutes, span.Seconds);
+            else
+                return string.Format("{0}s", span.Seconds);
+        }
+        #endregion
 
         /// <summary>
         /// Defines the regions of Britannia (Felucca/Trammel) we want to keep populated.
@@ -97,20 +227,15 @@ namespace Server.Engines
                 if (DEBUG_ENABLED)
                     Console.WriteLine("[{0}] [PlayerBotDirector] === Population Tick Started ===", GetTimestamp());
 
-                // Gather current live bots
-                List<PlayerBot> allBots = new List<PlayerBot>();
-                foreach (Mobile m in World.Mobiles.Values)
-                {
-                    PlayerBot bot = m as PlayerBot;
-                    if (bot != null && !bot.Deleted)
-                        allBots.Add(bot);
-                }
+                // Clean up any stale registrations first
+                CleanupStaleRegistrations();
 
+                int totalRegistered = GetRegisteredBotCount();
                 if (DEBUG_ENABLED)
-                    Console.WriteLine("[{0}] [PlayerBotDirector] Found {1} total PlayerBots in world (global cap: {2})", GetTimestamp(), allBots.Count, GLOBAL_CAP);
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Found {1} registered PlayerBots (global cap: {2})", GetTimestamp(), totalRegistered, GLOBAL_CAP);
 
                 // Global cap guard
-                if (allBots.Count >= GLOBAL_CAP)
+                if (totalRegistered >= GLOBAL_CAP)
                 {
                     if (DEBUG_ENABLED)
                         Console.WriteLine("[{0}] [PlayerBotDirector] Global cap reached! No new bots will be spawned.", GetTimestamp());
@@ -120,7 +245,7 @@ namespace Server.Engines
                 int totalSpawned = 0;
                 foreach (RegionProfile profile in m_Regions)
                 {
-                    int spawned = EnsureRegionPopulation(profile, allBots);
+                    int spawned = EnsureRegionPopulation(profile);
                     totalSpawned += spawned;
                 }
 
@@ -138,15 +263,11 @@ namespace Server.Engines
             }
         }
 
-        private int EnsureRegionPopulation(RegionProfile profile, List<PlayerBot> allBots)
+        private int EnsureRegionPopulation(RegionProfile profile)
         {
-            // Count existing bots inside region rectangle & map
-            int count = 0;
-            foreach (PlayerBot bot in allBots)
-            {
-                if (bot.Map == profile.Map && profile.Area.Contains(bot.Location))
-                    count++;
-            }
+            // Get bots in this region using the efficient registry
+            List<PlayerBot> botsInRegion = GetBotsInRegion(profile);
+            int count = botsInRegion.Count;
 
             if (DEBUG_ENABLED)
                 Console.WriteLine("[{0}] [PlayerBotDirector] Region '{1}': {2}/{3} bots present (target: {4}-{5})", 
@@ -165,7 +286,8 @@ namespace Server.Engines
             int toSpawn = Math.Min(profile.Min - count, profile.Max - count);
 
             // Respect global cap
-            int globalRemaining = GLOBAL_CAP - allBots.Count;
+            int totalRegistered = GetRegisteredBotCount();
+            int globalRemaining = GLOBAL_CAP - totalRegistered;
             if (toSpawn > globalRemaining)
             {
                 if (DEBUG_ENABLED)
@@ -204,12 +326,15 @@ namespace Server.Engines
             if (loc == Point3D.Zero)
             {
                 if (DEBUG_ENABLED)
-                    Console.WriteLine("[{0}] [PlayerBotDirector] Failed to find spawn location in region '{1}' after 20 attempts", GetTimestamp(), profile.Name);
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Failed to find spawn location in region '{1}' after {2} attempts", GetTimestamp(), profile.Name, SPAWN_LOCATION_ATTEMPTS);
                 return false; // failed to find safe spot
             }
 
             PlayerBot bot = new PlayerBot(); // Uses default random persona
             bot.MoveToWorld(loc, profile.Map);
+
+            // Register the bot with the director
+            RegisterBot(bot);
 
             if (DEBUG_ENABLED)
             {
@@ -231,7 +356,7 @@ namespace Server.Engines
         private Point3D FindSpawnLocation(RegionProfile profile)
         {
             Map map = profile.Map;
-            for (int i = 0; i < 20; i++) // try up to 20 random points
+            for (int i = 0; i < SPAWN_LOCATION_ATTEMPTS; i++) // try up to configured attempts
             {
                 int x = Utility.RandomMinMax(profile.Area.Start.X, profile.Area.End.X);
                 int y = Utility.RandomMinMax(profile.Area.Start.Y, profile.Area.End.Y);
@@ -241,8 +366,8 @@ namespace Server.Engines
                 if (CanSpawnAt(map, p))
                 {
                     if (DEBUG_ENABLED)
-                        Console.WriteLine("[{0}] [PlayerBotDirector] Found spawn location {1} in region '{2}' (attempt {3}/20)", 
-                            GetTimestamp(), p, profile.Name, i + 1);
+                        Console.WriteLine("[{0}] [PlayerBotDirector] Found spawn location {1} in region '{2}' (attempt {3}/{4})", 
+                            GetTimestamp(), p, profile.Name, i + 1, SPAWN_LOCATION_ATTEMPTS);
                     return p;
                 }
             }
@@ -263,6 +388,21 @@ namespace Server.Engines
         #endregion
 
         #region Nested types
+        /// <summary>
+        /// Information about a registered PlayerBot for lifecycle tracking
+        /// </summary>
+        private class PlayerBotInfo
+        {
+            public PlayerBot Bot { get; private set; }
+            public DateTime SpawnTime { get; private set; }
+
+            public PlayerBotInfo(PlayerBot bot)
+            {
+                Bot = bot;
+                SpawnTime = DateTime.Now;
+            }
+        }
+
         private class RegionProfile
         {
             private string _name;

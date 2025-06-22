@@ -101,9 +101,10 @@ namespace Server.Mobiles
             InitCombatSkills();
             InitOutfit();
             InitConsumables();
+            
+            // Register with the PlayerBotDirector for population management
+            Server.Engines.PlayerBotDirector.Instance.RegisterBot(this);
         }
-
-
 
         [Constructable]
         public PlayerBot() : this(AIType.AI_PlayerBot)
@@ -424,17 +425,17 @@ namespace Server.Mobiles
         private void InitCrafterSkills()
         {
             // Crafters focus on crafting and utility skills
-            var craftingSkills = new List<SkillName>()
+            List<SkillName> craftingSkills = new List<SkillName>(new SkillName[]
             {
                 SkillName.Alchemy, SkillName.Blacksmith, SkillName.Carpentry,
                 SkillName.Cartography, SkillName.Cooking, SkillName.Fletching,
                 SkillName.Inscribe, SkillName.Lumberjacking, SkillName.Mining,
                 SkillName.Tailoring, SkillName.Tinkering
-            };
+            });
             
             // Select 2-3 primary crafting skills
             int primaryCount = Utility.RandomMinMax(2, 3);
-            var primarySkills = new List<SkillName>();
+            List<SkillName> primarySkills = new List<SkillName>();
             
             for (int i = 0; i < primaryCount; i++)
             {
@@ -612,7 +613,7 @@ namespace Server.Mobiles
         private void InitCombatSkills()
         {
             m_PrefersMelee = Utility.RandomBool();
-            var preferedMeleeSkill = Utility.Random(4);
+            int preferedMeleeSkill = Utility.Random(4);
             SkillName skill = 0;
 
             if(m_PrefersMelee)
@@ -919,7 +920,7 @@ namespace Server.Mobiles
 
         private BaseWeapon GenerateWeapon()
         {
-            var weaponPool = new List<BaseWeapon>();
+            List<BaseWeapon> weaponPool = new List<BaseWeapon>();
             BaseWeapon weapon = null;
 
             if (PreferedCombatSkill == SkillName.Swords)
@@ -1051,7 +1052,7 @@ namespace Server.Mobiles
 
             if (weaponPool.Count > 0)
             {
-                var weaponIndex = m_Rnd.Next(weaponPool.Count);
+                int weaponIndex = m_Rnd.Next(weaponPool.Count);
                 weapon = weaponPool[weaponIndex];
             }
             
@@ -1185,7 +1186,7 @@ namespace Server.Mobiles
 
         private void InitHair()
         {
-            var hairHue = Utility.RandomHairHue();
+            int hairHue = Utility.RandomHairHue();
 
             Utility.AssignRandomHair(this, hairHue);
 
@@ -1211,28 +1212,25 @@ namespace Server.Mobiles
             // 30% chance to be plain (no extra wearables)
             if (Utility.RandomDouble() < 0.3)
                 return;
-
-            // Pool of wearable types (robes, sashes, kilts, surcoats, etc.)
-            var wearableOptions = new List<Action>()
-            {
-                () => AddItem(new Cloak(GetClothHue())),
-                () => AddItem(new Robe(GetClothHue())),
-                () => AddItem(new Surcoat(GetClothHue())),
-                () => AddItem(new Tunic(GetClothHue())),
-                () => AddItem(new BodySash(GetClothHue())),
-                () => AddItem(new Kilt(GetClothHue())),
-                () => AddItem(new Skirt(GetClothHue())),
-                () => AddItem(new FancyDress(GetClothHue())),
-                () => AddItem(new PlainDress(GetClothHue())),
-                () => AddItem(new JesterSuit(GetClothHue())),
-                () => AddItem(new Doublet(GetClothHue())),
-                () => AddItem(new HalfApron(GetClothHue())),
-                () => AddItem(new FullApron(GetClothHue())),
-            };
+            
+            List<Action> wearableOptions = new List<Action>();
+            wearableOptions.Add(delegate() { AddItem(new Cloak(GetClothHue())); });
+            wearableOptions.Add(delegate() { AddItem(new Robe(GetClothHue())); });
+            wearableOptions.Add(delegate() { AddItem(new Surcoat(GetClothHue())); });
+            wearableOptions.Add(delegate() { AddItem(new Tunic(GetClothHue())); });
+            wearableOptions.Add(delegate() { AddItem(new BodySash(GetClothHue())); });
+            wearableOptions.Add(delegate() { AddItem(new Kilt(GetClothHue())); });
+            wearableOptions.Add(delegate() { AddItem(new Skirt(GetClothHue())); });
+            wearableOptions.Add(delegate() { AddItem(new FancyDress(GetClothHue())); });
+            wearableOptions.Add(delegate() { AddItem(new PlainDress(GetClothHue())); });
+            wearableOptions.Add(delegate() { AddItem(new JesterSuit(GetClothHue())); });
+            wearableOptions.Add(delegate() { AddItem(new Doublet(GetClothHue())); });
+            wearableOptions.Add(delegate() { AddItem(new HalfApron(GetClothHue())); });
+            wearableOptions.Add(delegate() { AddItem(new FullApron(GetClothHue())); });
 
             // 1-3 extra wearables, randomly chosen, no duplicates
             int count = Utility.RandomMinMax(1, 3);
-            var used = new List<int>();
+            List<int> used = new List<int>();
             for (int i = 0; i < count; i++)
             {
                 int idx;
@@ -1400,6 +1398,14 @@ namespace Server.Mobiles
                 }
             }
         }
+
+        public override void OnDelete()
+        {
+            // Unregister from the PlayerBotDirector
+            Server.Engines.PlayerBotDirector.Instance.UnregisterBot(this);
+            
+            base.OnDelete();
+        }
         #endregion
 
         public virtual Mobile GetOwner()
@@ -1439,7 +1445,7 @@ namespace Server.Mobiles
 
         private BaseShield GenerateShield()
         {
-            var shieldPool = new List<BaseShield>();
+            List<BaseShield> shieldPool = new List<BaseShield>();
             
             // Get base stats for shield selection
             int str = this.Str;
