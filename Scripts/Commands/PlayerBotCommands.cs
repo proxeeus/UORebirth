@@ -50,50 +50,11 @@ namespace Server.Commands
         }
 
         [Usage("BotStatus")]
-        [Description("Displays current PlayerBot system status and statistics.")]
+        [Description("Opens the comprehensive PlayerBot system status gump.")]
         public static void BotStatus_OnCommand(CommandEventArgs e)
         {
             Mobile from = e.Mobile;
-            PlayerBotDirector director = PlayerBotDirector.Instance;
-            PlayerBotConfigurationManager.BehaviorConfig config = PlayerBotConfigurationManager.BehaviorSettings;
-            
-            from.SendMessage(0x35, "=== PlayerBot System Status ===");
-            
-            // Population Statistics
-            int totalBots = director.GetRegisteredBotCount();
-            from.SendMessage("Population: {0}/{1} bots active (Global Cap: {2})", 
-                totalBots, config.GlobalCap, config.GlobalCap);
-            
-            // Region Statistics
-            Dictionary<string, int> regionCounts = GetBotsPerRegion();
-            from.SendMessage("Active Regions: {0}", GetActiveRegionCount());
-            
-            foreach (KeyValuePair<string, PlayerBotConfigurationManager.RegionConfig> regionPair in PlayerBotConfigurationManager.Regions)
-            {
-                PlayerBotConfigurationManager.RegionConfig region = regionPair.Value;
-                if (region.Active)
-                {
-                    int currentBots = regionCounts.ContainsKey(region.Name) ? regionCounts[region.Name] : 0;
-                    from.SendMessage("  - {0}: {1}/{2} bots (Target: {3}-{4}) [{5}]", 
-                        region.Name, currentBots, region.MaxBots, region.MinBots, region.MaxBots, region.SafetyLevel);
-                }
-            }
-            
-            // Persona Distribution
-            Dictionary<PlayerBotPersona.PlayerBotProfile, int> personaCounts = GetPersonaDistribution();
-            from.SendMessage("Persona Distribution:");
-            from.SendMessage("  - Adventurers: {0}", personaCounts.ContainsKey(PlayerBotPersona.PlayerBotProfile.Adventurer) ? personaCounts[PlayerBotPersona.PlayerBotProfile.Adventurer] : 0);
-            from.SendMessage("  - Crafters: {0}", personaCounts.ContainsKey(PlayerBotPersona.PlayerBotProfile.Crafter) ? personaCounts[PlayerBotPersona.PlayerBotProfile.Crafter] : 0);
-            from.SendMessage("  - Player Killers: {0}", personaCounts.ContainsKey(PlayerBotPersona.PlayerBotProfile.PlayerKiller) ? personaCounts[PlayerBotPersona.PlayerBotProfile.PlayerKiller] : 0);
-            
-            // Configuration Status
-            from.SendMessage("Configuration:");
-            from.SendMessage("  - Population Tick: {0}s", config.PopulationTickSeconds);
-            from.SendMessage("  - Behavior Tick: {0}s", config.BehaviorTickSeconds);
-            from.SendMessage("  - Points of Interest: {0}", PlayerBotConfigurationManager.PointsOfInterest.Count);
-            from.SendMessage("  - Travel Routes: {0}", PlayerBotConfigurationManager.TravelRoutes.Count);
-            from.SendMessage("  - Logging Enabled: {0}", config.EnableLogging);
-            from.SendMessage("  - Last Config Load: {0}", PlayerBotConfigurationManager.LastLoadTime.ToString("yyyy-MM-dd HH:mm:ss"));
+            from.SendGump(new Server.Gumps.PlayerBotStatusGump(from));
         }
 
         [Usage("BotInfo")]
