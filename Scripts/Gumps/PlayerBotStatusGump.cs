@@ -210,38 +210,19 @@ namespace Server.Gumps
             y += 30;
 
             // Region Summary
-            AddHtml(210, y, 520, 20, Color(Center("Active Regions"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Region Summary"), SelectedColor32), false, false);
             y += 30;
 
-            Dictionary<string, int> regionCounts = GetBotsPerRegion();
             int activeRegions = 0;
             foreach (PlayerBotConfigurationManager.RegionConfig region in PlayerBotConfigurationManager.Regions.Values)
             {
                 if (region.Active)
-                {
                     activeRegions++;
-                    int currentBots = regionCounts.ContainsKey(region.Name) ? regionCounts[region.Name] : 0;
-                    int targetMin = region.MinBots;
-                    int targetMax = region.MaxBots;
-
-                    AddLabel(220, y, LabelHue, region.Name + ":");
-                    
-                    string botText = String.Format("{0}/{1}", currentBots, targetMax);
-                    int botHue = currentBots < targetMin ? RedHue : (currentBots > targetMax ? YellowHue : GreenHue);
-                    AddLabel(400, y, botHue, botText);
-                    
-                    // Safety indicator
-                    string safetyText = String.Format("[{0}]", region.SafetyLevel);
-                    int safetyHue = region.SafetyLevel == PlayerBotConfigurationManager.SafetyLevel.Safe ? GreenHue : 
-                                   (region.SafetyLevel == PlayerBotConfigurationManager.SafetyLevel.Wilderness ? YellowHue : RedHue);
-                    AddLabel(500, y, safetyHue, safetyText);
-                    
-                    // Map indicator
-                    AddLabel(580, y, LabelHue, String.Format("({0})", region.Map));
-                    
-                    y += 20;
-                }
             }
+
+            AddLabel(220, y, LabelHue, "Total Active Regions:");
+            AddLabel(400, y, activeRegions > 0 ? GreenHue : RedHue, activeRegions.ToString());
+            y += 20;
 
             if (activeRegions == 0)
             {
@@ -962,4 +943,6 @@ namespace Server.Gumps
             return String.Compare(botX.Name, botY.Name);
         }
     }
+
+
 } 
