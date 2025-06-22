@@ -23,12 +23,20 @@ namespace Server.Engines
         private const int SPAWN_LOCATION_ATTEMPTS = 20; // Max attempts to find spawn location
         private const int STARTUP_DELAY_SECONDS = 10;   // Delay before first population tick
         
+        // Phase 2: Travel & Behavior Constants
+        private const int BEHAVIOR_TICK_SECONDS = 45;   // How often to evaluate bot behaviors
+        private const int TRAVEL_CHANCE_PERCENT = 15;   // Chance per behavior tick that a bot will travel
+        private const int INTERACTION_CHANCE_PERCENT = 25; // Chance per behavior tick that bots will interact
+        private const int MIN_TRAVEL_DISTANCE = 10;     // Minimum tiles to travel
+        private const int MAX_TRAVEL_DISTANCE = 50;     // Maximum tiles to travel
+        
         // Debug toggle - set to false to disable verbose logging
         private static bool DEBUG_ENABLED = true;
         #endregion
 
         #region Private Fields
         private Timer m_Timer;
+        private Timer m_BehaviorTimer; // Phase 2: Behavior management timer
         private List<RegionProfile> m_Regions;
         
         // Bot registry for efficient tracking
@@ -48,11 +56,17 @@ namespace Server.Engines
             m_RegisteredBots = new Dictionary<Serial, PlayerBotInfo>();
             SeedDefaultRegions();
 
-            // Delay a few seconds after server start, then tick regularly.
+            // Phase 1: Population management timer
             m_Timer = Timer.DelayCall(TimeSpan.FromSeconds(STARTUP_DELAY_SECONDS), TimeSpan.FromSeconds(POPULATION_TICK_SECONDS), new TimerCallback(OnPopulationTick));
             
+            // Phase 2: Behavior management timer (starts a bit later to let population stabilize)
+            m_BehaviorTimer = Timer.DelayCall(TimeSpan.FromSeconds(STARTUP_DELAY_SECONDS + 15), TimeSpan.FromSeconds(BEHAVIOR_TICK_SECONDS), new TimerCallback(OnBehaviorTick));
+            
             if (DEBUG_ENABLED)
-                Console.WriteLine("[{0}] [PlayerBotDirector] Constructor completed. Timer will start in {1} seconds, then tick every {2} seconds.", GetTimestamp(), STARTUP_DELAY_SECONDS, POPULATION_TICK_SECONDS);
+            {
+                Console.WriteLine("[{0}] [PlayerBotDirector] Constructor completed. Population timer starts in {1}s, behavior timer in {2}s", 
+                    GetTimestamp(), STARTUP_DELAY_SECONDS, STARTUP_DELAY_SECONDS + 15);
+            }
         }
 
         [CallPriority(int.MaxValue)]
@@ -60,7 +74,7 @@ namespace Server.Engines
         {
             // Accessing Instance forces the singleton to construct and start the timer.
             PlayerBotDirector unused = Instance;
-            Console.WriteLine("[{0}] [PlayerBotDirector] Initialized (phase 1) - Debug mode: {1}", GetTimestamp(), DEBUG_ENABLED ? "ON" : "OFF");
+            Console.WriteLine("[{0}] [PlayerBotDirector] Initialized (phase 1 + 2) - Debug mode: {1}", GetTimestamp(), DEBUG_ENABLED ? "ON" : "OFF");
         }
 
         #region Bot Registration System
@@ -425,6 +439,327 @@ namespace Server.Engines
                 _min = min;
                 _max = max;
             }
+        }
+        #endregion
+
+        #region Phase 2: Behavior Management
+        private void OnBehaviorTick()
+        {
+            try
+            {
+                if (DEBUG_ENABLED)
+                    Console.WriteLine("[{0}] [PlayerBotDirector] === Behavior Tick Started ===", GetTimestamp());
+
+                List<PlayerBot> allBots = GetAllRegisteredBots();
+                
+                if (allBots.Count == 0)
+                {
+                    if (DEBUG_ENABLED)
+                        Console.WriteLine("[{0}] [PlayerBotDirector] No bots registered for behavior management", GetTimestamp());
+                    return;
+                }
+
+                if (DEBUG_ENABLED)
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Managing behaviors for {1} bots", GetTimestamp(), allBots.Count);
+
+                // Phase 2 behaviors
+                ProcessBotTravel(allBots);
+                ProcessBotInteractions(allBots);
+
+                if (DEBUG_ENABLED)
+                    Console.WriteLine("[{0}] [PlayerBotDirector] === Behavior Tick Complete ===", GetTimestamp());
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[{0}] [PlayerBotDirector] Exception in behavior tick: {1}", GetTimestamp(), ex);
+            }
+        }
+
+        private List<PlayerBot> GetAllRegisteredBots()
+        {
+            List<PlayerBot> result = new List<PlayerBot>();
+            
+            lock (m_RegistryLock)
+            {
+                foreach (PlayerBotInfo info in m_RegisteredBots.Values)
+                {
+                    if (info.Bot != null && !info.Bot.Deleted && info.Bot.Alive)
+                    {
+                        result.Add(info.Bot);
+                    }
+                }
+            }
+            
+            return result;
+        }
+
+        private void ProcessBotTravel(List<PlayerBot> allBots)
+        {
+            int travelingBots = 0;
+            
+            foreach (PlayerBot bot in allBots)
+            {
+                // Skip bots that are in combat or controlled by players
+                if (bot.Combatant != null || bot.Controled)
+                    continue;
+
+                // Random chance to travel
+                if (Utility.Random(100) < TRAVEL_CHANCE_PERCENT)
+                {
+                    if (InitiateBotTravel(bot))
+                        travelingBots++;
+                }
+            }
+
+            if (DEBUG_ENABLED && travelingBots > 0)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Initiated travel for {1} bots", GetTimestamp(), travelingBots);
+        }
+
+        private bool InitiateBotTravel(PlayerBot bot)
+        {
+            // Choose a random travel destination within the same map
+            Point3D currentLoc = bot.Location;
+            Map map = bot.Map;
+            
+            if (map == null)
+                return false;
+
+            // Generate a random travel destination
+            int distance = Utility.RandomMinMax(MIN_TRAVEL_DISTANCE, MAX_TRAVEL_DISTANCE);
+            int angle = Utility.Random(360);
+            
+            double radians = angle * Math.PI / 180.0;
+            int deltaX = (int)(Math.Cos(radians) * distance);
+            int deltaY = (int)(Math.Sin(radians) * distance);
+            
+            Point3D destination = new Point3D(
+                currentLoc.X + deltaX,
+                currentLoc.Y + deltaY,
+                map.GetAverageZ(currentLoc.X + deltaX, currentLoc.Y + deltaY)
+            );
+
+            // Validate the destination
+            if (!CanSpawnAt(map, destination))
+            {
+                if (DEBUG_ENABLED)
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' travel destination {2} is invalid", 
+                        GetTimestamp(), bot.Name, destination);
+                return false;
+            }
+
+            // Set the bot's destination (this will be handled by the AI)
+            if (bot.AIObject != null)
+            {
+                bot.AIObject.Action = ActionType.Wander;
+                // In a more sophisticated implementation, we'd set a specific destination
+                // For now, we'll just encourage wandering behavior
+                
+                if (DEBUG_ENABLED)
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' beginning travel from {2} towards {3} (distance: {4})", 
+                        GetTimestamp(), bot.Name, currentLoc, destination, distance);
+                
+                return true;
+            }
+
+            return false;
+        }
+
+        private void ProcessBotInteractions(List<PlayerBot> allBots)
+        {
+            int interactions = 0;
+            
+            // Group bots by proximity for potential interactions
+            Dictionary<Point3D, List<PlayerBot>> proximityGroups = new Dictionary<Point3D, List<PlayerBot>>();
+            
+            foreach (PlayerBot bot in allBots)
+            {
+                if (bot.Combatant != null || bot.Controled)
+                    continue;
+
+                // Group by approximate location (10x10 tile groups)
+                Point3D groupKey = new Point3D(
+                    (bot.Location.X / 10) * 10,
+                    (bot.Location.Y / 10) * 10,
+                    0
+                );
+                
+                if (!proximityGroups.ContainsKey(groupKey))
+                    proximityGroups[groupKey] = new List<PlayerBot>();
+                
+                proximityGroups[groupKey].Add(bot);
+            }
+
+            // Process interactions within each proximity group
+            foreach (List<PlayerBot> group in proximityGroups.Values)
+            {
+                if (group.Count >= 2)
+                {
+                    interactions += ProcessGroupInteractions(group);
+                }
+            }
+
+            if (DEBUG_ENABLED && interactions > 0)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Processed {1} bot interactions", GetTimestamp(), interactions);
+        }
+
+        private int ProcessGroupInteractions(List<PlayerBot> group)
+        {
+            int interactions = 0;
+            
+            foreach (PlayerBot bot in group)
+            {
+                // Random chance for this bot to initiate interaction
+                if (Utility.Random(100) < INTERACTION_CHANCE_PERCENT)
+                {
+                    // Find nearby bots within interaction range
+                    List<PlayerBot> nearbyBots = new List<PlayerBot>();
+                    
+                    foreach (PlayerBot otherBot in group)
+                    {
+                        if (otherBot != bot && bot.InRange(otherBot, 5))
+                        {
+                            nearbyBots.Add(otherBot);
+                        }
+                    }
+
+                    if (nearbyBots.Count > 0)
+                    {
+                        PlayerBot target = nearbyBots[Utility.Random(nearbyBots.Count)];
+                        
+                        if (InitiateBotInteraction(bot, target))
+                            interactions++;
+                    }
+                }
+            }
+            
+            return interactions;
+        }
+
+        private bool InitiateBotInteraction(PlayerBot initiator, PlayerBot target)
+        {
+            // Check if both bots can interact
+            if (initiator.Deleted || target.Deleted || 
+                initiator.Combatant != null || target.Combatant != null ||
+                initiator.Controled || target.Controled)
+                return false;
+
+            // Check interaction cooldown (prevent spam)
+            if (DateTime.Now - initiator.LastSpeechTime < TimeSpan.FromSeconds(30))
+                return false;
+
+            // Generate interaction based on bot personas
+            string message = GenerateInteractionMessage(initiator, target);
+            
+            if (!string.IsNullOrEmpty(message))
+            {
+                initiator.SayWithHue(message);
+                initiator.LastSpeechTime = DateTime.Now;
+                
+                // Face each other
+                initiator.Direction = initiator.GetDirectionTo(target);
+                target.Direction = target.GetDirectionTo(initiator);
+                
+                if (DEBUG_ENABLED)
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Bot interaction: '{1}' -> '{2}': \"{3}\"", 
+                        GetTimestamp(), initiator.Name, target.Name, message);
+                
+                // Schedule a response from the target
+                Timer.DelayCall(TimeSpan.FromSeconds(Utility.RandomMinMax(2, 5)), 
+                    new TimerCallback(delegate() { GenerateInteractionResponse(target, initiator); }));
+                
+                return true;
+            }
+            
+            return false;
+        }
+
+        private string GenerateInteractionMessage(PlayerBot initiator, PlayerBot target)
+        {
+            // Generate messages based on bot personas and experience levels
+            List<string> messages = new List<string>();
+            
+            // Friendly greetings
+            messages.Add("Hail, " + target.Name + "!");
+            messages.Add("Well met, friend.");
+            messages.Add("Good day to you.");
+            messages.Add("Greetings, traveler.");
+            
+            // Experience-based interactions
+            if (initiator.PlayerBotExperience == PlayerBotPersona.PlayerBotExperience.Newbie)
+            {
+                messages.Add("I'm still learning the ways of this land.");
+                messages.Add("Have you seen any good hunting spots?");
+                messages.Add("This place is quite overwhelming.");
+            }
+            else if (initiator.PlayerBotExperience == PlayerBotPersona.PlayerBotExperience.Grandmaster)
+            {
+                messages.Add("The roads have been dangerous lately.");
+                messages.Add("I've seen better days in these lands.");
+                messages.Add("The young ones need guidance these days.");
+            }
+            
+            // Profile-based interactions
+            if (initiator.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.Crafter)
+            {
+                messages.Add("I've been working on my craft all morning.");
+                messages.Add("The market prices have been fair lately.");
+                messages.Add("Have you any materials to trade?");
+            }
+            else if (initiator.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.Adventurer)
+            {
+                messages.Add("I hear there's treasure to be found in the dungeons.");
+                messages.Add("The monsters grow stronger each day.");
+                messages.Add("Adventure calls to those brave enough.");
+            }
+            else if (initiator.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.PlayerKiller)
+            {
+                messages.Add("These lands belong to the strong.");
+                messages.Add("Watch your back, stranger.");
+                messages.Add("Not all who wander are friendly.");
+            }
+            
+            if (messages.Count > 0)
+                return messages[Utility.Random(messages.Count)];
+            
+            return "Hello there.";
+        }
+
+        private void GenerateInteractionResponse(PlayerBot responder, PlayerBot initiator)
+        {
+            if (responder == null || responder.Deleted || initiator == null || initiator.Deleted)
+                return;
+                
+            if (!responder.InRange(initiator, 8))
+                return;
+
+            List<string> responses = new List<string>();
+            
+            // Generic responses
+            responses.Add("Indeed, " + initiator.Name + ".");
+            responses.Add("Aye, that's true.");
+            responses.Add("I agree completely.");
+            responses.Add("Well said.");
+            responses.Add("Farewell for now.");
+            
+            // Profile-specific responses
+            if (responder.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.Crafter)
+            {
+                responses.Add("My workshop keeps me busy.");
+                responses.Add("Quality work takes time.");
+            }
+            else if (responder.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.Adventurer)
+            {
+                responses.Add("The path ahead is uncertain.");
+                responses.Add("May fortune favor your journey.");
+            }
+            
+            string response = responses[Utility.Random(responses.Count)];
+            responder.SayWithHue(response);
+            responder.LastSpeechTime = DateTime.Now;
+            
+            if (DEBUG_ENABLED)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Bot response: '{1}' -> '{2}': \"{3}\"", 
+                    GetTimestamp(), responder.Name, initiator.Name, response);
         }
         #endregion
     }
