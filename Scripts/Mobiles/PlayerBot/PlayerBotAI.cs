@@ -56,13 +56,13 @@ namespace Server.Mobiles
             bool isParalyze = (targ is Server.Spells.Fifth.ParalyzeSpell.InternalTarget);
 
             // Check for summon spells by checking the target type name and flags
+            // Note: Summon Daemon is not included because it doesn't use targeting
             string targTypeName = targ.GetType().Name;
             string targNamespace = targ.GetType().Namespace ?? "";
             bool isSummonSpell = 
                 (targTypeName == "InternalTarget" && 
                  (targNamespace.Contains("BladeSpirits") || 
-                  targNamespace.Contains("EnergyVortex") || 
-                  targNamespace.Contains("SummonDaemon"))) ||
+                  targNamespace.Contains("EnergyVortex"))) ||
                 (targ.Flags == TargetFlags.None && targ.AllowGround && targ.Range == 12);
 
             // If it's a summon spell, target the combatant directly (this will summon at their location)
@@ -1343,13 +1343,19 @@ namespace Server.Mobiles
                     break;
 
                 case 7:
+                    selectedSpell = new Server.Spells.Seventh.FlameStrikeSpell(playerBot, null);
+                    break;
+
                 case 8:
                     {
-                        switch (Utility.Random(3))
+                        switch (Utility.Random(6))
                         {
-                            case 0: selectedSpell = new Server.Spells.Seventh.FlameStrikeSpell(playerBot, null); break;
-                            case 1: selectedSpell = new Server.Spells.Eighth.EnergyVortexSpell(playerBot, null); break;
-                            default: selectedSpell = new Server.Spells.Eighth.SummonDaemonSpell(playerBot, null); break;
+                            case 0: selectedSpell = new Server.Spells.Eighth.EnergyVortexSpell(playerBot, null); break;
+                            case 1: selectedSpell = new Server.Spells.Eighth.SummonDaemonSpell(playerBot, null); break;
+                            case 2: selectedSpell = new Server.Spells.Eighth.AirElementalSpell(playerBot, null); break;
+                            case 3: selectedSpell = new Server.Spells.Eighth.EarthElementalSpell(playerBot, null); break;
+                            case 4: selectedSpell = new Server.Spells.Eighth.FireElementalSpell(playerBot, null); break;
+                            default: selectedSpell = new Server.Spells.Eighth.WaterElementalSpell(playerBot, null); break;
                         }
                     }
                     break;
