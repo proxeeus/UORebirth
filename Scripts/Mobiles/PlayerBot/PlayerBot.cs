@@ -65,6 +65,31 @@ namespace Server.Mobiles
             return false;
         }
 
+        // ---------------- Hire system ----------------
+        public static int HireSlots = 0; // follower slots used when hired (0 means no slot consumed)
+
+        private void BeginHire(Mobile hirer)
+        {
+            if (Controled) // already controlled
+                return;
+
+            SetControlMaster(hirer);
+            Controled = true;
+            ControlSlots = HireSlots;
+
+            SayWithHue(String.Format("As you wish, {0}. I am yours to command.", hirer.Name));
+        }
+
+        private void EndHire()
+        {
+            if (!Controled)
+                return;
+
+            SayWithHue("Very well, farewell.");
+            SetControlMaster(null);
+            Controled = false;
+            ControlSlots = 0;
+        }
 
         #region Constructors
         public PlayerBot(AIType AI) : base(AI, FightMode.Agressor, 10, 1, 0.5, 0.75)
@@ -1291,17 +1316,33 @@ namespace Server.Mobiles
         }
         public override void OnSpeech(SpeechEventArgs e)
         {
-            if (!e.Handled && e.Mobile.InRange(this, 4))
+            if (!e.Handled && e.Mobile.InRange(this, 2))
             {
+                string speech = e.Speech.ToLowerInvariant();
+
+                // Hire command
+                if (!Controled && speech.Contains(Name.ToLowerInvariant()) && speech.Contains("hire"))
+                {
+                    e.Handled = true;
+                    BeginHire(e.Mobile);
+                    return;
+                }
+
+                // Release command from master
+                if (Controled && ControlMaster == e.Mobile && speech.Contains(Name.ToLowerInvariant()) && speech.Contains("release"))
+                {
+                    e.Handled = true;
+                    EndHire();
+                    return;
+                }
+
+                // Legacy interaction check
                 if (e.HasKeyword(0x003B) || e.HasKeyword(0x0162))
                 {
                     e.Handled = true;
                     if (this.Controled)
                     {
-                        if (this.ControlMaster == e.Mobile)
-                        {
-                        }
-                        else
+                        if (this.ControlMaster != e.Mobile)
                         {
                             Say("I don't think I've agreed to work with you...yet?");
                         }

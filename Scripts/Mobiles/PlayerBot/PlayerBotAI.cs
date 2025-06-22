@@ -29,6 +29,9 @@ namespace Server.Mobiles
         // Throttle how often this bot will cast *any* buff (self or ally)
         private DateTime m_NextBuffAllowed = DateTime.MinValue;
 
+        // Add new field to track intended beneficiary of next beneficial spell
+        private Mobile m_SupportTarget;
+
         public PlayerBotAI(BaseCreature m) : base(m)
         {
             m_SavedWeapon = null;
@@ -142,7 +145,9 @@ namespace Server.Mobiles
             }
             else if ((targ.Flags & TargetFlags.Beneficial) != 0)
             {
-                targ.Invoke(m_Mobile, m_Mobile);
+                Mobile beneTarget = (m_SupportTarget != null && !m_SupportTarget.Deleted) ? m_SupportTarget : m_Mobile;
+                targ.Invoke(m_Mobile, beneTarget);
+                m_SupportTarget = null; // reset after use
             }
             else
             {
@@ -1297,14 +1302,33 @@ namespace Server.Mobiles
 
                 // 3) Buff our control master (owner) if present and close
                 Mobile master = playerBot.ControlMaster;
-                if (master != null && !master.Deleted && playerBot.InRange(master, 6) && DateTime.Now >= m_NextBuffAllowed)
+                if (master != null && !master.Deleted && playerBot.InRange(master, 6))
                 {
-                    buff = GetBestBuffSpell(playerBot, master);
-                    if (buff != null && Utility.RandomDouble() < BUFF_CAST_CHANCE)
+                    // 1b) Cure poison or heal our master if needed
+                    if (master.Poisoned && playerBot.Mana >= 6)
                     {
-                        m_NextBuffAllowed = DateTime.Now + TimeSpan.FromSeconds(15);
-                        playerBot.DebugSay("Buffing my owner {0} with {1}", master.Name, buff.GetType().Name);
+                        buff = new Server.Spells.Second.CureSpell(playerBot, null);
+                        m_SupportTarget = master;
+                        playerBot.DebugSay("Casting Cure on my owner {0}", master.Name);
                         return buff;
+                    }
+                    // Heal if low health (<60%)
+                    if (master.Hits < master.HitsMax * 0.6)
+                    {
+                        if (playerBot.Skills[SkillName.Magery].Base >= 45 && playerBot.Mana >= 11)
+                        {
+                            buff = new Server.Spells.Fourth.GreaterHealSpell(playerBot, null);
+                        }
+                        else if (playerBot.Mana >= 6)
+                        {
+                            buff = new Server.Spells.First.HealSpell(playerBot, null);
+                        }
+                        if (buff != null)
+                        {
+                            m_SupportTarget = master;
+                            playerBot.DebugSay("Healing my owner {0} with {1}", master.Name, buff.GetType().Name);
+                            return buff;
+                        }
                     }
                 }
 
@@ -1321,6 +1345,7 @@ namespace Server.Mobiles
                         if (buff != null && Utility.RandomDouble() < BUFF_CAST_CHANCE)
                         {
                             m_NextBuffAllowed = DateTime.Now + TimeSpan.FromSeconds(15);
+                            m_SupportTarget = ally;
                             playerBot.DebugSay("Buffing ally {0} with {1}", ally.Name, buff.GetType().Name);
                             return buff;
                         }
