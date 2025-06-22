@@ -110,25 +110,25 @@ namespace Server.Gumps
 
             AddPage(0);
 
-            // Main background - larger than AdminGump to accommodate more content
-            AddBackground(0, 0, 620, 540, 5054);
+            // Main background - properly sized for all content
+            AddBackground(0, 0, 750, 700, 5054);
 
-            // Navigation panel
-            AddBlackAlpha(10, 10, 180, 120);
-            // Main content area
-            AddBlackAlpha(200, 10, 410, 480);
-            // Notice area
-            AddBlackAlpha(10, 500, 600, 30);
+            // Navigation panel - taller to fit all buttons properly
+            AddBlackAlpha(10, 10, 180, 140);
+            // Main content area - wider and taller
+            AddBlackAlpha(200, 10, 540, 640);
+            // Notice area - wider to match new size
+            AddBlackAlpha(10, 660, 730, 30);
 
-            // Navigation buttons
-            AddPageButton(10, 10, GetButtonID(0, 0), "OVERVIEW", PlayerBotStatusPage.Overview);
-            AddPageButton(10, 30, GetButtonID(0, 1), "BOT LIST", PlayerBotStatusPage.BotList, PlayerBotStatusPage.BotDetails);
-            AddPageButton(10, 50, GetButtonID(0, 2), "REGIONS", PlayerBotStatusPage.RegionDetails);
-            AddPageButton(10, 70, GetButtonID(0, 3), "CONFIG", PlayerBotStatusPage.Configuration);
-            AddPageButton(10, 90, GetButtonID(0, 4), "REFRESH", PlayerBotStatusPage.Overview);
+            // Navigation buttons - properly spaced
+            AddPageButton(15, 15, GetButtonID(0, 0), "OVERVIEW", PlayerBotStatusPage.Overview);
+            AddPageButton(15, 40, GetButtonID(0, 1), "BOT LIST", PlayerBotStatusPage.BotList, PlayerBotStatusPage.BotDetails);
+            AddPageButton(15, 65, GetButtonID(0, 2), "REGIONS", PlayerBotStatusPage.RegionDetails);
+            AddPageButton(15, 90, GetButtonID(0, 3), "CONFIG", PlayerBotStatusPage.Configuration);
+            AddPageButton(15, 115, GetButtonID(0, 4), "REFRESH", PlayerBotStatusPage.Overview);
 
             if (notice != null)
-                AddHtml(12, 502, 596, 26, Color(notice, LabelColor32), false, false);
+                AddHtml(12, 662, 726, 26, Color(notice, LabelColor32), false, false);
 
             switch (pageType)
             {
@@ -165,32 +165,32 @@ namespace Server.Gumps
             PlayerBotDirector director = PlayerBotDirector.Instance;
             PlayerBotConfigurationManager.BehaviorConfig config = PlayerBotConfigurationManager.BehaviorSettings;
 
-            AddHtml(210, 20, 400, 20, Color(Center("PlayerBot System Overview"), LabelColor32), false, false);
+            AddHtml(210, 20, 520, 20, Color(Center("PlayerBot System Overview"), LabelColor32), false, false);
 
             int y = 50;
 
             // Population Statistics
-            AddHtml(210, y, 400, 20, Color(Center("Population Statistics"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Population Statistics"), SelectedColor32), false, false);
             y += 30;
 
             int totalBots = director.GetRegisteredBotCount();
             AddLabel(220, y, LabelHue, "Total Active Bots:");
-            AddLabel(380, y, totalBots > 0 ? GreenHue : RedHue, totalBots.ToString());
+            AddLabel(400, y, totalBots > 0 ? GreenHue : RedHue, totalBots.ToString());
             y += 20;
 
             AddLabel(220, y, LabelHue, "Global Capacity:");
-            AddLabel(380, y, LabelHue, config.GlobalCap.ToString());
+            AddLabel(400, y, LabelHue, config.GlobalCap.ToString());
             y += 20;
 
             AddLabel(220, y, LabelHue, "Utilization:");
             double utilization = config.GlobalCap > 0 ? (double)totalBots / config.GlobalCap * 100.0 : 0.0;
             int utilizationHue = utilization > 90 ? RedHue : (utilization > 75 ? YellowHue : GreenHue);
-            AddLabel(380, y, utilizationHue, String.Format("{0:F1}%", utilization));
+            AddLabel(400, y, utilizationHue, String.Format("{0:F1}%", utilization));
             y += 30;
 
             // Persona Distribution
             Dictionary<PlayerBotPersona.PlayerBotProfile, int> personaCounts = GetPersonaDistribution();
-            AddHtml(210, y, 400, 20, Color(Center("Persona Distribution"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Persona Distribution"), SelectedColor32), false, false);
             y += 30;
 
             int adventurers = personaCounts.ContainsKey(PlayerBotPersona.PlayerBotProfile.Adventurer) ? personaCounts[PlayerBotPersona.PlayerBotProfile.Adventurer] : 0;
@@ -198,19 +198,19 @@ namespace Server.Gumps
             int pks = personaCounts.ContainsKey(PlayerBotPersona.PlayerBotProfile.PlayerKiller) ? personaCounts[PlayerBotPersona.PlayerBotProfile.PlayerKiller] : 0;
 
             AddLabel(220, y, LabelHue, "Adventurers:");
-            AddLabel(380, y, BlueHue, adventurers.ToString());
+            AddLabel(400, y, BlueHue, adventurers.ToString());
             y += 20;
 
             AddLabel(220, y, LabelHue, "Crafters:");
-            AddLabel(380, y, GreenHue, crafters.ToString());
+            AddLabel(400, y, GreenHue, crafters.ToString());
             y += 20;
 
             AddLabel(220, y, LabelHue, "Player Killers:");
-            AddLabel(380, y, RedHue, pks.ToString());
+            AddLabel(400, y, RedHue, pks.ToString());
             y += 30;
 
             // Region Summary
-            AddHtml(210, y, 400, 20, Color(Center("Active Regions"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Active Regions"), SelectedColor32), false, false);
             y += 30;
 
             Dictionary<string, int> regionCounts = GetBotsPerRegion();
@@ -228,13 +228,16 @@ namespace Server.Gumps
                     
                     string botText = String.Format("{0}/{1}", currentBots, targetMax);
                     int botHue = currentBots < targetMin ? RedHue : (currentBots > targetMax ? YellowHue : GreenHue);
-                    AddLabel(380, y, botHue, botText);
+                    AddLabel(400, y, botHue, botText);
                     
                     // Safety indicator
                     string safetyText = String.Format("[{0}]", region.SafetyLevel);
                     int safetyHue = region.SafetyLevel == PlayerBotConfigurationManager.SafetyLevel.Safe ? GreenHue : 
                                    (region.SafetyLevel == PlayerBotConfigurationManager.SafetyLevel.Wilderness ? YellowHue : RedHue);
-                    AddLabel(450, y, safetyHue, safetyText);
+                    AddLabel(500, y, safetyHue, safetyText);
+                    
+                    // Map indicator
+                    AddLabel(580, y, LabelHue, String.Format("({0})", region.Map));
                     
                     y += 20;
                 }
@@ -249,35 +252,35 @@ namespace Server.Gumps
             y += 10;
 
             // System Status
-            AddHtml(210, y, 400, 20, Color(Center("System Status"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("System Status"), SelectedColor32), false, false);
             y += 30;
 
             AddLabel(220, y, LabelHue, "Population Tick:");
-            AddLabel(380, y, LabelHue, config.PopulationTickSeconds + "s");
+            AddLabel(400, y, LabelHue, config.PopulationTickSeconds + "s");
             y += 20;
 
             AddLabel(220, y, LabelHue, "Behavior Tick:");
-            AddLabel(380, y, LabelHue, config.BehaviorTickSeconds + "s");
+            AddLabel(400, y, LabelHue, config.BehaviorTickSeconds + "s");
             y += 20;
 
             AddLabel(220, y, LabelHue, "Logging Enabled:");
-            AddLabel(380, y, config.EnableLogging ? GreenHue : RedHue, config.EnableLogging ? "Yes" : "No");
+            AddLabel(400, y, config.EnableLogging ? GreenHue : RedHue, config.EnableLogging ? "Yes" : "No");
             y += 20;
 
             AddLabel(220, y, LabelHue, "Last Config Load:");
-            AddLabel(380, y, LabelHue, PlayerBotConfigurationManager.LastLoadTime.ToString("HH:mm:ss"));
+            AddLabel(400, y, LabelHue, PlayerBotConfigurationManager.LastLoadTime.ToString("HH:mm:ss"));
             y += 30;
 
             // Quick Actions
-            AddHtml(210, y, 400, 20, Color(Center("Quick Actions"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Quick Actions"), SelectedColor32), false, false);
             y += 30;
 
             AddButtonLabeled(220, y, GetButtonID(9, 0), "Reload Configuration");
-            AddButtonLabeled(420, y, GetButtonID(9, 1), "Spawn Test Bot");
+            AddButtonLabeled(450, y, GetButtonID(9, 1), "Spawn Test Bot");
             y += 25;
 
             AddButtonLabeled(220, y, GetButtonID(9, 2), "Delete All Bots");
-            AddButtonLabeled(420, y, GetButtonID(9, 3), "Export Statistics");
+            AddButtonLabeled(450, y, GetButtonID(9, 3), "Export Statistics");
         }
 
         private void AddBotListPage()
@@ -297,25 +300,15 @@ namespace Server.Gumps
                 m_List.Sort(new PlayerBotComparer());
             }
 
-            AddHtml(210, 20, 400, 20, Color(Center("Active PlayerBots"), LabelColor32), false, false);
+            AddHtml(210, 20, 520, 20, Color(Center("Active PlayerBots"), LabelColor32), false, false);
 
-            // Column headers
-            AddLabelCropped(210, 50, 100, 20, LabelHue, "Name");
-            AddLabelCropped(320, 50, 80, 20, LabelHue, "Profile");
-            AddLabelCropped(410, 50, 60, 20, LabelHue, "Status");
-            AddLabelCropped(480, 50, 60, 20, LabelHue, "Location");
-            AddLabelCropped(550, 50, 50, 20, LabelHue, "Actions");
-
-            // Pagination
-            if (m_ListPage > 0)
-                AddButton(575, 52, 0x15E3, 0x15E7, GetButtonID(1, 0), GumpButtonType.Reply, 0);
-            else
-                AddImage(575, 52, 0x25EA);
-
-            if ((m_ListPage + 1) * 15 < m_List.Count)
-                AddButton(592, 52, 0x15E1, 0x15E5, GetButtonID(1, 1), GumpButtonType.Reply, 0);
-            else
-                AddImage(592, 52, 0x25E6);
+            // Column headers - better spaced for wider gump
+            AddLabelCropped(210, 50, 120, 20, LabelHue, "Name");
+            AddLabelCropped(340, 50, 90, 20, LabelHue, "Profile");
+            AddLabelCropped(440, 50, 70, 20, LabelHue, "Status");
+            AddLabelCropped(520, 50, 80, 20, LabelHue, "Location");
+            AddLabelCropped(610, 50, 60, 20, LabelHue, "Experience");
+            AddLabelCropped(680, 50, 50, 20, LabelHue, "Actions");
 
             if (m_List.Count == 0)
                 AddLabel(210, 80, RedHue, "No active PlayerBots found.");
@@ -326,189 +319,241 @@ namespace Server.Gumps
                 int y = 80 + (i * 25);
 
                 // Name
-                AddLabelCropped(210, y, 100, 20, GetBotNameHue(bot), bot.Name);
+                AddLabelCropped(210, y, 120, 20, GetBotNameHue(bot), bot.Name);
 
                 // Profile
                 string profileText = bot.PlayerBotProfile.ToString();
-                if (profileText.Length > 8)
-                    profileText = profileText.Substring(0, 8);
-                AddLabelCropped(320, y, 80, 20, GetProfileHue(bot.PlayerBotProfile), profileText);
+                if (profileText.Length > 10)
+                    profileText = profileText.Substring(0, 10);
+                AddLabelCropped(340, y, 90, 20, GetProfileHue(bot.PlayerBotProfile), profileText);
 
                 // Status
                 string status = GetBotStatus(bot);
-                AddLabelCropped(410, y, 60, 20, GetStatusHue(bot), status);
+                AddLabelCropped(440, y, 70, 20, GetStatusHue(bot), status);
 
                 // Location
                 string location = String.Format("{0},{1}", bot.X, bot.Y);
-                AddLabelCropped(480, y, 60, 20, LabelHue, location);
+                AddLabelCropped(520, y, 80, 20, LabelHue, location);
+
+                // Experience
+                string expText = bot.PlayerBotExperience.ToString();
+                if (expText.Length > 8)
+                    expText = expText.Substring(0, 8);
+                AddLabelCropped(610, y, 60, 20, LabelHue, expText);
 
                 // Actions
-                AddButton(550, y - 1, 4005, 4007, GetButtonID(2, index), GumpButtonType.Reply, 0);
-                AddHtml(550 + 35, y, 50, 20, Color("Go To", LabelColor32), false, false);
+                AddButton(680, y - 1, 4005, 4007, GetButtonID(2, index), GumpButtonType.Reply, 0);
+                AddHtml(680 + 35, y, 50, 20, Color("Go", LabelColor32), false, false);
             }
 
-            // Summary
+            // Summary and pagination controls at bottom
             int totalCount = m_List.Count;
             int startIndex = m_ListPage * 15 + 1;
             int endIndex = Math.Min((m_ListPage + 1) * 15, totalCount);
             
-            AddHtml(210, 460, 400, 20, Color(Center(String.Format("Showing {0}-{1} of {2} bots", startIndex, endIndex, totalCount)), LabelColor32), false, false);
+            // Summary text on the left
+            AddHtml(210, 480, 400, 20, Color(String.Format("Showing {0}-{1} of {2} bots", startIndex, endIndex, totalCount), LabelColor32), false, false);
+            
+            // Pagination buttons on the right
+            if (m_ListPage > 0)
+                AddButton(650, 478, 0x15E3, 0x15E7, GetButtonID(1, 0), GumpButtonType.Reply, 0);
+            else
+                AddImage(650, 478, 0x25EA);
+
+            if ((m_ListPage + 1) * 15 < m_List.Count)
+                AddButton(670, 478, 0x15E1, 0x15E5, GetButtonID(1, 1), GumpButtonType.Reply, 0);
+            else
+                AddImage(670, 478, 0x25E6);
         }
 
         private void AddRegionDetailsPage()
         {
-            AddHtml(210, 20, 400, 20, Color(Center("Region Details"), LabelColor32), false, false);
+            // Build list of active regions if not already built
+            if (m_List == null)
+            {
+                m_List = new ArrayList();
+                foreach (KeyValuePair<string, PlayerBotConfigurationManager.RegionConfig> regionPair in PlayerBotConfigurationManager.Regions)
+                {
+                    PlayerBotConfigurationManager.RegionConfig region = regionPair.Value;
+                    if (region.Active)
+                    {
+                        m_List.Add(region);
+                    }
+                }
+            }
 
+            AddHtml(210, 20, 520, 20, Color(Center("Region Details"), LabelColor32), false, false);
+
+            // Pagination controls - regions per page: 5 (each takes ~70px, better spacing)
+            int regionsPerPage = 5;
+            
             int y = 50;
             Dictionary<string, int> regionCounts = GetBotsPerRegion();
 
-            foreach (KeyValuePair<string, PlayerBotConfigurationManager.RegionConfig> regionPair in PlayerBotConfigurationManager.Regions)
+            if (m_List.Count == 0)
             {
-                PlayerBotConfigurationManager.RegionConfig region = regionPair.Value;
-                if (!region.Active)
-                    continue;
+                AddLabel(210, y, RedHue, "No active regions found.");
+                return;
+            }
 
+            // Display regions for current page
+            for (int i = 0, index = (m_ListPage * regionsPerPage); i < regionsPerPage && index >= 0 && index < m_List.Count; ++i, ++index)
+            {
+                PlayerBotConfigurationManager.RegionConfig region = (PlayerBotConfigurationManager.RegionConfig)m_List[index];
                 int currentBots = regionCounts.ContainsKey(region.Name) ? regionCounts[region.Name] : 0;
 
                 // Region header
-                AddHtml(210, y, 400, 20, Color(Center(region.Name), SelectedColor32), false, false);
+                AddHtml(210, y, 520, 20, Color(Center(region.Name), SelectedColor32), false, false);
                 y += 25;
 
-                // Status indicators
+                // Left column
                 AddLabel(220, y, LabelHue, "Status:");
-                AddLabel(280, y, region.Active ? GreenHue : RedHue, region.Active ? "Active" : "Inactive");
-                y += 20;
-
-                AddLabel(220, y, LabelHue, "Map:");
-                AddLabel(280, y, LabelHue, region.Map.ToString());
-                y += 20;
-
-                AddLabel(220, y, LabelHue, "Safety Level:");
+                AddLabel(300, y, region.Active ? GreenHue : RedHue, region.Active ? "Active" : "Inactive");
+                
+                AddLabel(220, y + 20, LabelHue, "Map:");
+                AddLabel(300, y + 20, LabelHue, region.Map.ToString());
+                
+                AddLabel(220, y + 40, LabelHue, "Safety Level:");
                 int safetyHue = region.SafetyLevel == PlayerBotConfigurationManager.SafetyLevel.Safe ? GreenHue : 
                                (region.SafetyLevel == PlayerBotConfigurationManager.SafetyLevel.Wilderness ? YellowHue : RedHue);
-                AddLabel(280, y, safetyHue, region.SafetyLevel.ToString());
-                y += 20;
+                AddLabel(300, y + 40, safetyHue, region.SafetyLevel.ToString());
 
-                AddLabel(220, y, LabelHue, "Bot Population:");
+                // Right column
+                AddLabel(450, y, LabelHue, "Bot Population:");
                 string popText = String.Format("{0} / {1}-{2}", currentBots, region.MinBots, region.MaxBots);
                 int popHue = currentBots < region.MinBots ? RedHue : (currentBots > region.MaxBots ? YellowHue : GreenHue);
-                AddLabel(280, y, popHue, popText);
-                y += 20;
-
-                AddLabel(220, y, LabelHue, "Spawn Weight:");
-                AddLabel(280, y, LabelHue, region.SpawnWeight.ToString("F1"));
-                y += 20;
-
-                AddLabel(220, y, LabelHue, "Bounds:");
-                AddLabel(280, y, LabelHue, String.Format("{0},{1} to {2},{3}", 
+                AddLabel(550, y, popHue, popText);
+                
+                AddLabel(450, y + 20, LabelHue, "Spawn Weight:");
+                AddLabel(550, y + 20, LabelHue, region.SpawnWeight.ToString("F1"));
+                
+                AddLabel(450, y + 40, LabelHue, "Bounds:");
+                AddLabel(550, y + 40, LabelHue, String.Format("{0},{1}-{2},{3}", 
                     region.Bounds.X, region.Bounds.Y, 
                     region.Bounds.X + region.Bounds.Width, 
                     region.Bounds.Y + region.Bounds.Height));
-                y += 30;
-
-                if (y > 430)
-                    break;
+                
+                y += 70;
             }
+
+            // Summary and pagination controls at bottom
+            int totalCount = m_List.Count;
+            int startIndex = m_ListPage * regionsPerPage + 1;
+            int endIndex = Math.Min((m_ListPage + 1) * regionsPerPage, totalCount);
+            
+            // Summary text on the left
+            AddHtml(210, 580, 400, 20, Color(String.Format("Showing {0}-{1} of {2} regions", startIndex, endIndex, totalCount), LabelColor32), false, false);
+            
+            // Pagination buttons on the right
+            if (m_ListPage > 0)
+                AddButton(650, 578, 0x15E3, 0x15E7, GetButtonID(1, 0), GumpButtonType.Reply, 0);
+            else
+                AddImage(650, 578, 0x25EA);
+
+            if ((m_ListPage + 1) * regionsPerPage < m_List.Count)
+                AddButton(670, 578, 0x15E1, 0x15E5, GetButtonID(1, 1), GumpButtonType.Reply, 0);
+            else
+                AddImage(670, 578, 0x25E6);
         }
 
         private void AddConfigurationPage()
         {
             PlayerBotConfigurationManager.BehaviorConfig config = PlayerBotConfigurationManager.BehaviorSettings;
 
-            AddHtml(210, 20, 400, 20, Color(Center("Configuration Settings"), LabelColor32), false, false);
+            AddHtml(210, 20, 520, 20, Color(Center("Configuration Settings"), LabelColor32), false, false);
 
             int y = 50;
 
             // Population Settings
-            AddHtml(210, y, 400, 20, Color(Center("Population Settings"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Population Settings"), SelectedColor32), false, false);
             y += 30;
 
             AddLabel(220, y, LabelHue, "Global Capacity:");
-            AddLabel(380, y, LabelHue, config.GlobalCap.ToString());
+            AddLabel(400, y, LabelHue, config.GlobalCap.ToString());
             y += 20;
 
             AddLabel(220, y, LabelHue, "Population Tick:");
-            AddLabel(380, y, LabelHue, config.PopulationTickSeconds + " seconds");
+            AddLabel(400, y, LabelHue, config.PopulationTickSeconds + " seconds");
             y += 20;
 
             AddLabel(220, y, LabelHue, "Spawn Attempts:");
-            AddLabel(380, y, LabelHue, config.SpawnLocationAttempts.ToString());
+            AddLabel(400, y, LabelHue, config.SpawnLocationAttempts.ToString());
             y += 30;
 
             // Behavior Settings
-            AddHtml(210, y, 400, 20, Color(Center("Behavior Settings"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Behavior Settings"), SelectedColor32), false, false);
             y += 30;
 
             AddLabel(220, y, LabelHue, "Behavior Tick:");
-            AddLabel(380, y, LabelHue, config.BehaviorTickSeconds + " seconds");
+            AddLabel(400, y, LabelHue, config.BehaviorTickSeconds + " seconds");
             y += 20;
 
             AddLabel(220, y, LabelHue, "Travel Chance:");
-            AddLabel(380, y, LabelHue, config.TravelChancePercent + "%");
+            AddLabel(400, y, LabelHue, config.TravelChancePercent + "%");
             y += 20;
 
             AddLabel(220, y, LabelHue, "Interaction Chance:");
-            AddLabel(380, y, LabelHue, config.InteractionChancePercent + "%");
+            AddLabel(400, y, LabelHue, config.InteractionChancePercent + "%");
             y += 20;
 
             AddLabel(220, y, LabelHue, "Shop Visit Chance:");
-            AddLabel(380, y, LabelHue, config.ShopVisitChance + "%");
+            AddLabel(400, y, LabelHue, config.ShopVisitChance + "%");
             y += 30;
 
             // Travel Settings
-            AddHtml(210, y, 400, 20, Color(Center("Travel Settings"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Travel Settings"), SelectedColor32), false, false);
             y += 30;
 
             AddLabel(220, y, LabelHue, "Min Travel Distance:");
-            AddLabel(380, y, LabelHue, config.MinTravelDistance + " tiles");
+            AddLabel(400, y, LabelHue, config.MinTravelDistance + " tiles");
             y += 20;
 
             AddLabel(220, y, LabelHue, "Max Travel Distance:");
-            AddLabel(380, y, LabelHue, config.MaxTravelDistance + " tiles");
+            AddLabel(400, y, LabelHue, config.MaxTravelDistance + " tiles");
             y += 20;
 
             AddLabel(220, y, LabelHue, "Inter-Region Travel:");
-            AddLabel(380, y, LabelHue, config.InterRegionTravelChance + "%");
+            AddLabel(400, y, LabelHue, config.InterRegionTravelChance + "%");
             y += 30;
 
             // Logging Settings
-            AddHtml(210, y, 400, 20, Color(Center("Logging Settings"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Logging Settings"), SelectedColor32), false, false);
             y += 30;
 
             AddLabel(220, y, LabelHue, "Enable Logging:");
-            AddLabel(380, y, config.EnableLogging ? GreenHue : RedHue, config.EnableLogging ? "Yes" : "No");
+            AddLabel(400, y, config.EnableLogging ? GreenHue : RedHue, config.EnableLogging ? "Yes" : "No");
             y += 20;
 
             AddLabel(220, y, LabelHue, "Verbose Spawning:");
-            AddLabel(380, y, config.VerboseSpawning ? GreenHue : RedHue, config.VerboseSpawning ? "Yes" : "No");
+            AddLabel(400, y, config.VerboseSpawning ? GreenHue : RedHue, config.VerboseSpawning ? "Yes" : "No");
             y += 20;
 
             AddLabel(220, y, LabelHue, "Verbose Travel:");
-            AddLabel(380, y, config.VerboseTravel ? GreenHue : RedHue, config.VerboseTravel ? "Yes" : "No");
+            AddLabel(400, y, config.VerboseTravel ? GreenHue : RedHue, config.VerboseTravel ? "Yes" : "No");
             y += 20;
 
             AddLabel(220, y, LabelHue, "Verbose Interactions:");
-            AddLabel(380, y, config.VerboseInteractions ? GreenHue : RedHue, config.VerboseInteractions ? "Yes" : "No");
+            AddLabel(400, y, config.VerboseInteractions ? GreenHue : RedHue, config.VerboseInteractions ? "Yes" : "No");
             y += 30;
 
             // File Information
-            AddHtml(210, y, 400, 20, Color(Center("File Information"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("File Information"), SelectedColor32), false, false);
             y += 30;
 
             AddLabel(220, y, LabelHue, "Regions Loaded:");
-            AddLabel(380, y, LabelHue, PlayerBotConfigurationManager.Regions.Count.ToString());
+            AddLabel(400, y, LabelHue, PlayerBotConfigurationManager.Regions.Count.ToString());
             y += 20;
 
             AddLabel(220, y, LabelHue, "POIs Loaded:");
-            AddLabel(380, y, LabelHue, PlayerBotConfigurationManager.PointsOfInterest.Count.ToString());
+            AddLabel(400, y, LabelHue, PlayerBotConfigurationManager.PointsOfInterest.Count.ToString());
             y += 20;
 
             AddLabel(220, y, LabelHue, "Routes Loaded:");
-            AddLabel(380, y, LabelHue, PlayerBotConfigurationManager.TravelRoutes.Count.ToString());
+            AddLabel(400, y, LabelHue, PlayerBotConfigurationManager.TravelRoutes.Count.ToString());
             y += 20;
 
             AddLabel(220, y, LabelHue, "Last Loaded:");
-            AddLabel(380, y, LabelHue, PlayerBotConfigurationManager.LastLoadTime.ToString("yyyy-MM-dd HH:mm:ss"));
+            AddLabel(400, y, LabelHue, PlayerBotConfigurationManager.LastLoadTime.ToString("yyyy-MM-dd HH:mm:ss"));
         }
 
         private void AddBotDetailsPage()
@@ -516,112 +561,111 @@ namespace Server.Gumps
             PlayerBot bot = m_State as PlayerBot;
             if (bot == null || bot.Deleted)
             {
-                AddHtml(210, 20, 400, 20, Color(Center("Bot Not Found"), RedHue), false, false);
+                AddHtml(210, 20, 520, 20, Color(Center("Bot Not Found"), RedHue), false, false);
                 return;
             }
 
-            AddHtml(210, 20, 400, 20, Color(Center("Bot Details: " + bot.Name), LabelColor32), false, false);
+            AddHtml(210, 20, 520, 20, Color(Center("Bot Details: " + bot.Name), LabelColor32), false, false);
 
             int y = 50;
 
             // Basic Information
-            AddHtml(210, y, 400, 20, Color(Center("Basic Information"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Basic Information"), SelectedColor32), false, false);
             y += 30;
 
+            // Left column
             AddLabel(220, y, LabelHue, "Name:");
             AddLabel(320, y, GetBotNameHue(bot), bot.Name);
-            y += 20;
+            
+            AddLabel(220, y + 20, LabelHue, "Profile:");
+            AddLabel(320, y + 20, GetProfileHue(bot.PlayerBotProfile), bot.PlayerBotProfile.ToString());
+            
+            AddLabel(220, y + 40, LabelHue, "Experience:");
+            AddLabel(320, y + 40, LabelHue, bot.PlayerBotExperience.ToString());
 
-            AddLabel(220, y, LabelHue, "Profile:");
-            AddLabel(320, y, GetProfileHue(bot.PlayerBotProfile), bot.PlayerBotProfile.ToString());
-            y += 20;
-
-            AddLabel(220, y, LabelHue, "Experience:");
-            AddLabel(320, y, LabelHue, bot.PlayerBotExperience.ToString());
-            y += 20;
-
-            AddLabel(220, y, LabelHue, "Status:");
-            AddLabel(320, y, GetStatusHue(bot), GetBotStatus(bot));
-            y += 20;
-
-            AddLabel(220, y, LabelHue, "Location:");
-            AddLabel(320, y, LabelHue, String.Format("{0} ({1},{2})", bot.Map, bot.X, bot.Y));
-            y += 30;
+            // Right column
+            AddLabel(450, y, LabelHue, "Status:");
+            AddLabel(550, y, GetStatusHue(bot), GetBotStatus(bot));
+            
+            AddLabel(450, y + 20, LabelHue, "Location:");
+            AddLabel(550, y + 20, LabelHue, String.Format("{0} ({1},{2})", bot.Map, bot.X, bot.Y));
+            
+            AddLabel(450, y + 40, LabelHue, "Speech Hue:");
+            AddLabel(550, y + 40, bot.SpeechHue, "Sample Text");
+            
+            y += 10;
 
             // Statistics
-            AddHtml(210, y, 400, 20, Color(Center("Statistics"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Statistics"), SelectedColor32), false, false);
             y += 30;
 
+            // Left column - Fame/Karma/Stats
             AddLabel(220, y, LabelHue, "Fame:");
             AddLabel(320, y, bot.Fame >= 0 ? GreenHue : RedHue, bot.Fame.ToString());
-            y += 20;
+            
+            AddLabel(220, y + 20, LabelHue, "Karma:");
+            AddLabel(320, y + 20, bot.Karma >= 0 ? GreenHue : RedHue, bot.Karma.ToString());
+            
+            AddLabel(220, y + 40, LabelHue, "Hits:");
+            AddLabel(320, y + 40, LabelHue, String.Format("{0}/{1}", bot.Hits, bot.HitsMax));
 
-            AddLabel(220, y, LabelHue, "Karma:");
-            AddLabel(320, y, bot.Karma >= 0 ? GreenHue : RedHue, bot.Karma.ToString());
-            y += 20;
-
-            AddLabel(220, y, LabelHue, "Hits:");
-            AddLabel(320, y, LabelHue, String.Format("{0}/{1}", bot.Hits, bot.HitsMax));
-            y += 20;
-
-            AddLabel(220, y, LabelHue, "Mana:");
-            AddLabel(320, y, LabelHue, String.Format("{0}/{1}", bot.Mana, bot.ManaMax));
-            y += 20;
-
-            AddLabel(220, y, LabelHue, "Stamina:");
-            AddLabel(320, y, LabelHue, String.Format("{0}/{1}", bot.Stam, bot.StamMax));
-            y += 30;
+            // Right column - More stats
+            AddLabel(450, y, LabelHue, "Mana:");
+            AddLabel(550, y, LabelHue, String.Format("{0}/{1}", bot.Mana, bot.ManaMax));
+            
+            AddLabel(450, y + 20, LabelHue, "Stamina:");
+            AddLabel(550, y + 20, LabelHue, String.Format("{0}/{1}", bot.Stam, bot.StamMax));
+            
+            AddLabel(450, y + 40, LabelHue, "Str/Dex/Int:");
+            AddLabel(550, y + 40, LabelHue, String.Format("{0}/{1}/{2}", bot.Str, bot.Dex, bot.Int));
+            
+            y += 10;
 
             // Combat Information
-            AddHtml(210, y, 400, 20, Color(Center("Combat Information"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Combat Information"), SelectedColor32), false, false);
             y += 30;
 
             AddLabel(220, y, LabelHue, "Preferred Combat:");
-            AddLabel(320, y, LabelHue, bot.PrefersMelee ? "Melee" : "Ranged");
-            y += 20;
-
-            AddLabel(220, y, LabelHue, "Combat Skill:");
-            AddLabel(320, y, LabelHue, bot.PreferedCombatSkill.ToString());
-            y += 20;
-
-            AddLabel(220, y, LabelHue, "Current Target:");
+            AddLabel(350, y, LabelHue, bot.PrefersMelee ? "Melee" : "Ranged");
+            
+            AddLabel(220, y + 20, LabelHue, "Combat Skill:");
+            AddLabel(350, y + 20, LabelHue, bot.PreferedCombatSkill.ToString());
+            
+            AddLabel(450, y, LabelHue, "Current Target:");
             if (bot.Combatant != null)
-                AddLabel(320, y, RedHue, bot.Combatant.Name);
+                AddLabel(570, y, RedHue, bot.Combatant.Name);
             else
-                AddLabel(320, y, GreenHue, "None");
-            y += 30;
+                AddLabel(570, y, GreenHue, "None");
+                
+            y += 50;
 
             // Control Information
-            AddHtml(210, y, 400, 20, Color(Center("Control Information"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Control Information"), SelectedColor32), false, false);
             y += 30;
 
             AddLabel(220, y, LabelHue, "Controlled:");
             AddLabel(320, y, bot.Controled ? YellowHue : GreenHue, bot.Controled ? "Yes" : "No");
-            y += 20;
 
             if (bot.Controled && bot.ControlMaster != null)
             {
-                AddLabel(220, y, LabelHue, "Master:");
-                AddLabel(320, y, LabelHue, bot.ControlMaster.Name);
-                y += 20;
+                AddLabel(450, y, LabelHue, "Master:");
+                AddLabel(520, y, LabelHue, bot.ControlMaster.Name);
             }
 
-            y += 10;
+            y += 40;
 
             // Actions
-            AddHtml(210, y, 400, 20, Color(Center("Actions"), SelectedColor32), false, false);
+            AddHtml(210, y, 520, 20, Color(Center("Actions"), SelectedColor32), false, false);
             y += 30;
 
             AddButtonLabeled(220, y, GetButtonID(3, 0), "Go To Bot");
             AddButtonLabeled(350, y, GetButtonID(3, 1), "Get Bot");
+            AddButtonLabeled(480, y, GetButtonID(3, 5), "Refresh");
             y += 25;
 
             AddButtonLabeled(220, y, GetButtonID(3, 2), "Properties");
             AddButtonLabeled(350, y, GetButtonID(3, 3), "Skills");
-            y += 25;
-
-            AddButtonLabeled(220, y, GetButtonID(3, 4), "Delete Bot");
-            AddButtonLabeled(350, y, GetButtonID(3, 5), "Refresh");
+            AddButtonLabeled(480, y, GetButtonID(3, 4), "Delete Bot");
         }
 
         #region Helper Methods
