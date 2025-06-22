@@ -1351,6 +1351,18 @@ namespace Server.Mobiles
             base.OnSpeech(e);
         }
 
+        /// <summary>
+        /// Override the bot's persona after construction (used by PlayerBotDirector for region-based assignment)
+        /// </summary>
+        public void OverridePersona(PlayerBotPersona.PlayerBotProfile newProfile)
+        {
+            m_Persona.Profile = newProfile;
+            m_IsPlayerKiller = IsPlayerKiller();
+            
+            // Recalculate fame and karma based on new profile
+            InitFameAndKarma();
+        }
+
         // Custom speech methods that use the PlayerBot's speech hue
         public void SayWithHue(string text)
         {

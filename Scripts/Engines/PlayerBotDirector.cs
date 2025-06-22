@@ -91,20 +91,23 @@ namespace Server.Engines
             private Rectangle2D _area;
             private int _min;
             private int _max;
+            private PlayerBotConfigurationManager.SafetyLevel _safetyLevel;
 
             public string Name { get { return _name; } }
             public Map Map { get { return _map; } }
             public Rectangle2D Area { get { return _area; } }
             public int Min { get { return _min; } }
             public int Max { get { return _max; } }
+            public PlayerBotConfigurationManager.SafetyLevel SafetyLevel { get { return _safetyLevel; } }
 
-            public RegionProfile(string name, Map map, Rectangle2D area, int min, int max)
+            public RegionProfile(string name, Map map, Rectangle2D area, int min, int max, PlayerBotConfigurationManager.SafetyLevel safetyLevel)
             {
                 _name = name;
                 _map = map;
                 _area = area;
                 _min = min;
                 _max = max;
+                _safetyLevel = safetyLevel;
             }
         }
         #endregion
@@ -335,7 +338,7 @@ namespace Server.Engines
             {
                 if (regionConfig.Active)
                 {
-                    RegionProfile profile = new RegionProfile(regionConfig.Name, regionConfig.Map, regionConfig.Bounds, regionConfig.MinBots, regionConfig.MaxBots);
+                    RegionProfile profile = new RegionProfile(regionConfig.Name, regionConfig.Map, regionConfig.Bounds, regionConfig.MinBots, regionConfig.MaxBots, regionConfig.SafetyLevel);
                     m_Regions.Add(profile);
                 }
             }
@@ -504,6 +507,11 @@ namespace Server.Engines
             }
 
             PlayerBot bot = new PlayerBot(); // Uses default random persona
+            
+            // Override the persona based on region safety level
+            PlayerBotPersona.PlayerBotProfile assignedProfile = DeterminePersonaForRegion(profile.SafetyLevel);
+            bot.OverridePersona(assignedProfile);
+            
             bot.MoveToWorld(loc, profile.Map);
 
             // Register the bot with the director
@@ -519,11 +527,52 @@ namespace Server.Engines
                 if (bot.PlayerBotExperience != null)
                     experience = bot.PlayerBotExperience.ToString();
 
-                Console.WriteLine("[{0}] [PlayerBotDirector] Spawned bot '{1}' ({2} {3}) at {4} in region '{5}'", 
-                    GetTimestamp(), bot.Name, experience, persona, loc, profile.Name);
+                Console.WriteLine("[{0}] [PlayerBotDirector] Spawned bot '{1}' ({2} {3}) at {4} in region '{5}' (Safety: {6})", 
+                    GetTimestamp(), bot.Name, experience, persona, loc, profile.Name, profile.SafetyLevel);
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Determines the appropriate persona for a bot based on the region's safety level
+        /// </summary>
+        private PlayerBotPersona.PlayerBotProfile DeterminePersonaForRegion(PlayerBotConfigurationManager.SafetyLevel safetyLevel)
+        {
+            int adventurerPercent, crafterPercent, pkPercent;
+            
+            // Get percentages based on safety level
+            switch (safetyLevel)
+            {
+                case PlayerBotConfigurationManager.SafetyLevel.Safe:
+                    adventurerPercent = Config.SafeAdventurerPercent;
+                    crafterPercent = Config.SafeCrafterPercent;
+                    pkPercent = Config.SafePlayerKillerPercent;
+                    break;
+                    
+                case PlayerBotConfigurationManager.SafetyLevel.Dangerous:
+                    adventurerPercent = Config.DangerousAdventurerPercent;
+                    crafterPercent = Config.DangerousCrafterPercent;
+                    pkPercent = Config.DangerousPlayerKillerPercent;
+                    break;
+                    
+                case PlayerBotConfigurationManager.SafetyLevel.Wilderness:
+                default:
+                    adventurerPercent = Config.WildernessAdventurerPercent;
+                    crafterPercent = Config.WildernessCrafterPercent;
+                    pkPercent = Config.WildernessPlayerKillerPercent;
+                    break;
+            }
+            
+            // Generate random number and determine persona
+            int roll = Utility.Random(100);
+            
+            if (roll < adventurerPercent)
+                return PlayerBotPersona.PlayerBotProfile.Adventurer;
+            else if (roll < adventurerPercent + crafterPercent)
+                return PlayerBotPersona.PlayerBotProfile.Crafter;
+            else
+                return PlayerBotPersona.PlayerBotProfile.PlayerKiller;
         }
 
         private Point3D FindSpawnLocation(RegionProfile profile)

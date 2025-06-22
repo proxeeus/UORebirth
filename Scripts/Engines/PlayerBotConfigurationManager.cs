@@ -108,6 +108,7 @@ namespace Server.Engines
                     region.MinBots = ParseInt(GetValue(section.Value, "MinBots", "1"));
                     region.MaxBots = ParseInt(GetValue(section.Value, "MaxBots", "5"));
                     region.SpawnWeight = ParseDouble(GetValue(section.Value, "SpawnWeight", "1.0"));
+                    region.SafetyLevel = ParseSafetyLevel(GetValue(section.Value, "SafetyLevel", "Wilderness"));
                     region.Active = ParseBool(GetValue(section.Value, "Active", "true"));
                     
                     m_Regions[region.Name] = region;
@@ -253,6 +254,24 @@ namespace Server.Engines
                 m_BehaviorSettings.ProximityGroupSize = ParseInt(GetValue(inter, "ProximityGroupSize", "10"));
             }
             
+            // Persona Distribution settings
+            if (sections.ContainsKey("PersonaDistribution"))
+            {
+                Dictionary<string, string> persona = sections["PersonaDistribution"];
+                m_BehaviorSettings.DefaultAdventurerPercent = ParseInt(GetValue(persona, "DefaultAdventurerPercent", "50"));
+                m_BehaviorSettings.DefaultCrafterPercent = ParseInt(GetValue(persona, "DefaultCrafterPercent", "35"));
+                m_BehaviorSettings.DefaultPlayerKillerPercent = ParseInt(GetValue(persona, "DefaultPlayerKillerPercent", "15"));
+                m_BehaviorSettings.SafeAdventurerPercent = ParseInt(GetValue(persona, "SafeAdventurerPercent", "45"));
+                m_BehaviorSettings.SafeCrafterPercent = ParseInt(GetValue(persona, "SafeCrafterPercent", "50"));
+                m_BehaviorSettings.SafePlayerKillerPercent = ParseInt(GetValue(persona, "SafePlayerKillerPercent", "5"));
+                m_BehaviorSettings.DangerousAdventurerPercent = ParseInt(GetValue(persona, "DangerousAdventurerPercent", "40"));
+                m_BehaviorSettings.DangerousCrafterPercent = ParseInt(GetValue(persona, "DangerousCrafterPercent", "20"));
+                m_BehaviorSettings.DangerousPlayerKillerPercent = ParseInt(GetValue(persona, "DangerousPlayerKillerPercent", "40"));
+                m_BehaviorSettings.WildernessAdventurerPercent = ParseInt(GetValue(persona, "WildernessAdventurerPercent", "50"));
+                m_BehaviorSettings.WildernessCrafterPercent = ParseInt(GetValue(persona, "WildernessCrafterPercent", "30"));
+                m_BehaviorSettings.WildernessPlayerKillerPercent = ParseInt(GetValue(persona, "WildernessPlayerKillerPercent", "20"));
+            }
+
             // Debug settings
             if (sections.ContainsKey("Debug"))
             {
@@ -438,6 +457,17 @@ namespace Server.Engines
             }
         }
 
+        private static SafetyLevel ParseSafetyLevel(string value)
+        {
+            switch (value.ToLower())
+            {
+                case "safe": return SafetyLevel.Safe;
+                case "wilderness": return SafetyLevel.Wilderness;
+                case "dangerous": return SafetyLevel.Dangerous;
+                default: return SafetyLevel.Wilderness;
+            }
+        }
+
         private static int GetActiveRegionCount()
         {
             int count = 0;
@@ -470,6 +500,7 @@ namespace Server.Engines
             public int MinBots;
             public int MaxBots;
             public double SpawnWeight;
+            public SafetyLevel SafetyLevel;
             public bool Active;
         }
 
@@ -526,6 +557,20 @@ namespace Server.Engines
             public int InteractionRange = 5;
             public int ProximityGroupSize = 10;
             
+            // Persona Distribution
+            public int DefaultAdventurerPercent = 50;
+            public int DefaultCrafterPercent = 35;
+            public int DefaultPlayerKillerPercent = 15;
+            public int SafeAdventurerPercent = 45;
+            public int SafeCrafterPercent = 50;
+            public int SafePlayerKillerPercent = 5;
+            public int DangerousAdventurerPercent = 40;
+            public int DangerousCrafterPercent = 20;
+            public int DangerousPlayerKillerPercent = 40;
+            public int WildernessAdventurerPercent = 50;
+            public int WildernessCrafterPercent = 30;
+            public int WildernessPlayerKillerPercent = 20;
+
             // Debug
             public bool EnableLogging = true;
             public bool VerboseSpawning = true;
@@ -540,6 +585,13 @@ namespace Server.Engines
             Easy,
             Medium,
             Hard
+        }
+
+        public enum SafetyLevel
+        {
+            Safe,
+            Wilderness,
+            Dangerous
         }
         #endregion
     }
