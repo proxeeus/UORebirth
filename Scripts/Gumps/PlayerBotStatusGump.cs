@@ -433,6 +433,10 @@ namespace Server.Gumps
                     region.Bounds.X + region.Bounds.Width, 
                     region.Bounds.Y + region.Bounds.Height));
                 
+                // Goto button
+                AddButton(680, y + 20, 4005, 4007, GetButtonID(4, index), GumpButtonType.Reply, 0);
+                AddHtml(680 + 32, y + 20, 35, 20, Color("Goto", LabelColor32), false, false);
+                
                 y += 70;
             }
 
@@ -855,6 +859,26 @@ namespace Server.Gumps
                         case 5: // Refresh
                             from.SendGump(new PlayerBotStatusGump(from, m_PageType, m_ListPage, m_List, "Bot details refreshed.", m_State));
                             break;
+                    }
+                    break;
+                }
+                case 4: // Go To Region
+                {
+                    if (m_List != null && index >= 0 && index < m_List.Count)
+                    {
+                        PlayerBotConfigurationManager.RegionConfig region = (PlayerBotConfigurationManager.RegionConfig)m_List[index];
+                        if (region != null)
+                        {
+                            // Calculate center of region
+                            Point3D center = new Point3D(
+                                region.Bounds.X + (region.Bounds.Width / 2),
+                                region.Bounds.Y + (region.Bounds.Height / 2),
+                                region.Map.GetAverageZ(region.Bounds.X + (region.Bounds.Width / 2), region.Bounds.Y + (region.Bounds.Height / 2))
+                            );
+                            
+                            from.MoveToWorld(center, region.Map);
+                            from.SendGump(new PlayerBotStatusGump(from, m_PageType, m_ListPage, m_List, "Teleported to " + region.Name, m_State));
+                        }
                     }
                     break;
                 }
