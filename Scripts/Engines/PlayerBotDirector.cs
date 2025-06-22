@@ -622,6 +622,10 @@ namespace Server.Engines
             PlayerBotPersona.PlayerBotProfile assignedProfile = DeterminePersonaForRegion(profile.SafetyLevel);
             bot.OverridePersona(assignedProfile);
             
+            // Set large home range to allow travel between regions
+            bot.Home = loc;
+            bot.RangeHome = 20000; // Large range to allow inter-region travel
+            
             bot.MoveToWorld(loc, profile.Map);
 
             // Register the bot with the director
@@ -796,6 +800,16 @@ namespace Server.Engines
                     if (bot.InRange(botInfo.Destination, 5) || 
                         DateTime.Now - botInfo.LastStateChange > TimeSpan.FromMinutes(10))
                     {
+                        // Clear AI destination
+                        if (bot.AIObject != null)
+                        {
+                            PlayerBotAI playerBotAI = bot.AIObject as PlayerBotAI;
+                            if (playerBotAI != null)
+                            {
+                                playerBotAI.ClearDestination();
+                            }
+                        }
+                        
                         UpdateBotInfo(bot, BotBehaviorState.Idle, Point3D.Zero);
                         if (Config.EnableLogging && Config.VerboseTravel)
                             Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' completed travel to {2}", 
@@ -875,9 +889,16 @@ namespace Server.Engines
                 Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' beginning inter-region travel from {2} to {3} ({4})", 
                     GetTimestamp(), bot.Name, GetBotCurrentRegionName(bot), destinationName, destination);
 
-            // Set AI to wander towards destination
+            // Set AI destination and wander mode
             if (bot.AIObject != null)
+            {
+                PlayerBotAI playerBotAI = bot.AIObject as PlayerBotAI;
+                if (playerBotAI != null)
+                {
+                    playerBotAI.SetDestination(destination);
+                }
                 bot.AIObject.Action = ActionType.Wander;
+            }
 
             return true;
         }
@@ -928,9 +949,16 @@ namespace Server.Engines
                 Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' traveling locally to {2} ({3})", 
                     GetTimestamp(), bot.Name, destinationName, destination);
 
-            // Set AI to wander towards destination
+            // Set AI destination and wander mode
             if (bot.AIObject != null)
+            {
+                PlayerBotAI playerBotAI = bot.AIObject as PlayerBotAI;
+                if (playerBotAI != null)
+                {
+                    playerBotAI.SetDestination(destination);
+                }
                 bot.AIObject.Action = ActionType.Wander;
+            }
 
             return true;
         }
@@ -1314,6 +1342,11 @@ namespace Server.Engines
             // Set the bot's destination (this will be handled by the AI)
             if (bot.AIObject != null)
             {
+                PlayerBotAI playerBotAI = bot.AIObject as PlayerBotAI;
+                if (playerBotAI != null)
+                {
+                    playerBotAI.SetDestination(destination);
+                }
                 bot.AIObject.Action = ActionType.Wander;
                 
                 if (Config.EnableLogging && Config.VerboseTravel)
@@ -1817,7 +1850,20 @@ namespace Server.Engines
                         double distance = Math.Sqrt(Math.Pow(start.X - dest.X, 2) + Math.Pow(start.Y - dest.Y, 2));
                         if (distance >= 100) // At least 100 tiles away
                         {
-                            return dest;
+                            // CRITICAL: Check if both points are on the same landmass
+                            if (AreOnSameLandmass(start, dest, startRegion.Map))
+                            {
+                                return dest;
+                            }
+                            else
+                            {
+                                // Cross-island travel detected - skip this destination
+                                if (Config.EnableLogging && Config.VerboseTravel)
+                                {
+                                    Console.WriteLine("[{0}] [PlayerBotDirector] Skipping cross-island caravan destination from {1} to {2}", 
+                                        GetTimestamp(), start, dest);
+                                }
+                            }
                         }
                     }
                 }
@@ -1839,6 +1885,73 @@ namespace Server.Engines
             }
 
             return Point3D.Zero;
+        }
+
+        /// <summary>
+        /// Check if two points are on the same landmass (can be reached without crossing water)
+        /// </summary>
+        private bool AreOnSameLandmass(Point3D start, Point3D end, Map map)
+        {
+            // For now, use predefined landmass boundaries for Trammel/Felucca
+            if (map == Map.Trammel || map == Map.Felucca)
+            {
+                return GetLandmassId(start, map) == GetLandmassId(end, map);
+            }
+            
+            // For other maps, assume same landmass (Ilshenar, Malas are single landmasses)
+            return true;
+        }
+
+        /// <summary>
+        /// Get landmass ID for a point on Trammel/Felucca
+        /// </summary>
+        private int GetLandmassId(Point3D point, Map map)
+        {
+            if (map != Map.Trammel && map != Map.Felucca)
+                return 1; // Single landmass
+                
+            // Main continent (Britain, Minoc, Vesper, Trinsic, etc.)
+            if (point.X >= 0 && point.X <= 5120 && point.Y >= 0 && point.Y <= 4096)
+            {
+                // Check for major islands within the main map
+                
+                // Nujel'm island
+                if (point.X >= 3600 && point.X <= 4000 && point.Y >= 1000 && point.Y <= 1400)
+                    return 2;
+                    
+                // Moonglow island  
+                if (point.X >= 4400 && point.X <= 4700 && point.Y >= 900 && point.Y <= 1200)
+                    return 3;
+                    
+                // Magincia island
+                if (point.X >= 3650 && point.X <= 3950 && point.Y >= 2000 && point.Y <= 2300)
+                    return 4;
+                    
+                // Fire Island (near Buc's Den)
+                if (point.X >= 2200 && point.X <= 2600 && point.Y >= 1000 && point.Y <= 1400)
+                    return 5;
+                    
+                // Ice Island (Dagger Isle area)
+                if (point.X >= 3900 && point.X <= 4200 && point.Y >= 3700 && point.Y <= 4000)
+                    return 6;
+                    
+                // Skara Brae island
+                if (point.X >= 550 && point.X <= 750 && point.Y >= 2050 && point.Y <= 2250)
+                    return 7;
+                    
+                // Occllo island
+                if (point.X >= 3600 && point.X <= 3900 && point.Y >= 2600 && point.Y <= 2900)
+                    return 8;
+                    
+                // Main continent (everything else)
+                return 1;
+            }
+            
+            // Lost Lands (T2A area)
+            if (point.X >= 5120 && point.X <= 6144 && point.Y >= 2304 && point.Y <= 4096)
+                return 9; // Lost Lands
+                
+            return 1; // Default to main continent
         }
 
         /// <summary>

@@ -231,6 +231,10 @@ namespace Server.Engines
             Point3D spawnLoc = FindSpawnLocation(m_Center, 10);
             if (spawnLoc != Point3D.Zero)
             {
+                // Set large home range to allow scene movement
+                bot.Home = spawnLoc;
+                bot.RangeHome = 2000; // Large range for scene activities
+                
                 bot.MoveToWorld(spawnLoc, m_Map);
                 AddParticipant(bot);
                 

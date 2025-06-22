@@ -9,6 +9,34 @@ using Server.Misc;
 
 namespace Server.Mobiles
 {
+    /// <summary>
+    /// Simple dummy mobile for pathfinding to a location
+    /// </summary>
+    internal class DummyMobile : Mobile
+    {
+        public DummyMobile(Point3D location, Map map)
+        {
+            Location = location;
+            Map = map;
+        }
+
+        public DummyMobile(Serial serial) : base(serial)
+        {
+        }
+
+        public override void Serialize(GenericWriter writer)
+        {
+            base.Serialize(writer);
+            writer.Write((int)0); // version
+        }
+
+        public override void Deserialize(GenericReader reader)
+        {
+            base.Deserialize(reader);
+            int version = reader.ReadInt();
+        }
+    }
+
     public class PlayerBotAI : BaseAI
     {
         private DateTime m_NextCastTime;
@@ -32,13 +60,298 @@ namespace Server.Mobiles
         // Add new field to track intended beneficiary of next beneficial spell
         private Mobile m_SupportTarget;
 
+        // Destination-based movement
+        private Point3D m_TravelDestination = Point3D.Zero;
+        private DateTime m_LastDestinationCheck = DateTime.MinValue;
+        private Point3D m_PreCombatDestination = Point3D.Zero; // Store destination during combat
+        
+        // Stuck detection and recovery
+        private Point3D m_LastLocation = Point3D.Zero;
+        private DateTime m_LastMovementTime = DateTime.MinValue;
+        private int m_StuckAttempts = 0;
+        private DateTime m_LastUnstuckAttempt = DateTime.MinValue;
+        private Point3D m_LastFailedDestination = Point3D.Zero;
+        private List<Point3D> m_StuckLocations = new List<Point3D>(); // Track problematic locations
+        private DateTime m_LastStuckLocationClear = DateTime.MinValue;
+
         public PlayerBotAI(BaseCreature m) : base(m)
         {
             m_SavedWeapon = null;
             m_SavedShield = null;
             m_BuffTracker = new Dictionary<Mobile, Dictionary<string, DateTime>>();
             m_NextBuffAllowed = DateTime.MinValue;
+            m_LastLocation = m.Location;
+            m_LastMovementTime = DateTime.Now;
+            m_StuckLocations = new List<Point3D>();
         }
+
+        /// <summary>
+        /// Set a destination for the PlayerBot to travel to
+        /// </summary>
+        public void SetDestination(Point3D destination)
+        {
+            m_TravelDestination = destination;
+            m_LastDestinationCheck = DateTime.Now;
+            ResetStuckDetection();
+        }
+
+        /// <summary>
+        /// Clear the current destination
+        /// </summary>
+        public void ClearDestination()
+        {
+            m_TravelDestination = Point3D.Zero;
+            ResetStuckDetection();
+        }
+
+        /// <summary>
+        /// Check if the bot has a travel destination
+        /// </summary>
+        public bool HasDestination()
+        {
+            return m_TravelDestination != Point3D.Zero;
+        }
+
+        /// <summary>
+        /// Reset stuck detection when destination is reached or changed
+        /// </summary>
+        private void ResetStuckDetection()
+        {
+            m_LastLocation = m_Mobile.Location;
+            m_LastMovementTime = DateTime.Now;
+            m_StuckAttempts = 0;
+            m_LastUnstuckAttempt = DateTime.MinValue;
+        }
+
+        /// <summary>
+        /// Add a location to the stuck locations list
+        /// </summary>
+        private void AddStuckLocation(Point3D location)
+        {
+            // Don't add duplicate locations
+            foreach (Point3D stuckLoc in m_StuckLocations)
+            {
+                if (stuckLoc.X == location.X && stuckLoc.Y == location.Y)
+                    return;
+            }
+            
+            m_StuckLocations.Add(location);
+            
+            // Keep only the last 10 stuck locations to prevent memory bloat
+            if (m_StuckLocations.Count > 10)
+            {
+                m_StuckLocations.RemoveAt(0);
+            }
+        }
+
+        /// <summary>
+        /// Check if the bot is currently at a previously stuck location
+        /// </summary>
+        private bool IsAtStuckLocation()
+        {
+            Point3D currentLoc = m_Mobile.Location;
+            
+            foreach (Point3D stuckLoc in m_StuckLocations)
+            {
+                // Consider within 2 tiles as "at" the stuck location
+                if (Math.Abs(currentLoc.X - stuckLoc.X) <= 2 && Math.Abs(currentLoc.Y - stuckLoc.Y) <= 2)
+                    return true;
+            }
+            
+            return false;
+        }
+
+        /// <summary>
+        /// Try to escape from a stuck location by moving away from all known stuck locations
+        /// </summary>
+        private bool TryEscapeStuckLocation()
+        {
+            Point3D currentLoc = m_Mobile.Location;
+            
+            // Try to find a direction that moves away from all stuck locations
+            Direction[] allDirections = new Direction[] 
+            { 
+                Direction.North, (Direction)1, Direction.East, (Direction)3,
+                Direction.South, (Direction)5, Direction.West, (Direction)7
+            };
+            
+            // Score each direction based on how far it moves us from stuck locations
+            Direction bestDirection = Direction.North;
+            double bestScore = -1;
+            
+            foreach (Direction dir in allDirections)
+            {
+                Point3D testLoc = GetLocationInDirection(currentLoc, dir);
+                double score = CalculateDistanceFromStuckLocations(testLoc);
+                
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestDirection = dir;
+                }
+            }
+            
+            // Try to move in the best direction (with running)
+            Direction runningDir = bestDirection | Direction.Running;
+            bool moved = DoMove(runningDir);
+            
+            if (moved)
+            {
+                m_Mobile.DebugSay("Escaped stuck location by moving {0}", bestDirection);
+                return true;
+            }
+            
+            // If best direction failed, try any direction that moves away from stuck locations
+            foreach (Direction dir in allDirections)
+            {
+                Point3D testLoc = GetLocationInDirection(currentLoc, dir);
+                if (CalculateDistanceFromStuckLocations(testLoc) > 0)
+                {
+                    Direction runningDir2 = dir | Direction.Running;
+                    if (DoMove(runningDir2))
+                    {
+                        m_Mobile.DebugSay("Escaped stuck location by moving {0} (fallback)", dir);
+                        return true;
+                    }
+                }
+            }
+            
+            return false;
+        }
+
+        /// <summary>
+        /// Calculate the minimum distance from a location to all stuck locations
+        /// </summary>
+        private double CalculateDistanceFromStuckLocations(Point3D location)
+        {
+            if (m_StuckLocations.Count == 0)
+                return 100; // No stuck locations, any location is good
+                
+            double minDistance = double.MaxValue;
+            
+            foreach (Point3D stuckLoc in m_StuckLocations)
+            {
+                double distance = Math.Sqrt(Math.Pow(location.X - stuckLoc.X, 2) + Math.Pow(location.Y - stuckLoc.Y, 2));
+                if (distance < minDistance)
+                    minDistance = distance;
+            }
+            
+            return minDistance;
+        }
+
+        /// <summary>
+        /// Get the location one step in a given direction
+        /// </summary>
+        private Point3D GetLocationInDirection(Point3D from, Direction dir)
+        {
+            int x = from.X;
+            int y = from.Y;
+            
+            switch (dir & Direction.Mask)
+            {
+                case Direction.North: y--; break;
+                case (Direction)1: x++; y--; break; // Northeast
+                case Direction.East: x++; break;
+                case (Direction)3: x++; y++; break; // Southeast
+                case Direction.South: y++; break;
+                case (Direction)5: x--; y++; break; // Southwest
+                case Direction.West: x--; break;
+                case (Direction)7: x--; y--; break; // Northwest
+            }
+            
+            return new Point3D(x, y, from.Z);
+        }
+
+        /// <summary>
+        /// Try running movement with multiple strategies, always prioritizing running
+        /// </summary>
+        private bool TryRunningMovement()
+        {
+            // Strategy 1: Use pathfinding with running enabled
+            if (MoveTo(new DummyMobile(m_TravelDestination, m_Mobile.Map), true, 1))
+            {
+                return true;
+            }
+            
+            // Strategy 2: Direct running movement toward destination
+            Direction directDir = m_Mobile.GetDirectionTo(m_TravelDestination);
+            Direction runningDir = directDir | Direction.Running;
+            if (DoMove(runningDir))
+            {
+                return true;
+            }
+
+            // Strategy 3: Try alternative running directions around obstacles
+            Direction[] alternativeDirections = new Direction[]
+            {
+                (Direction)(((int)directDir + 1) % 8), // 45 degrees clockwise
+                (Direction)(((int)directDir + 7) % 8), // 45 degrees counter-clockwise
+                (Direction)(((int)directDir + 2) % 8), // 90 degrees clockwise
+                (Direction)(((int)directDir + 6) % 8), // 90 degrees counter-clockwise
+            };
+
+            foreach (Direction altDir in alternativeDirections)
+            {
+                Direction runningAltDir = altDir | Direction.Running;
+                if (DoMove(runningAltDir))
+                {
+                    return true;
+                }
+            }
+
+            // Strategy 4: Try any running direction that moves us closer to destination
+            Direction[] allDirections = new Direction[] 
+            { 
+                Direction.North, (Direction)1, Direction.East, (Direction)3,
+                Direction.South, (Direction)5, Direction.West, (Direction)7
+            };
+            
+            double currentDistance = m_Mobile.GetDistanceToSqrt(m_TravelDestination);
+            
+            foreach (Direction dir in allDirections)
+            {
+                Point3D testLoc = GetLocationInDirection(m_Mobile.Location, dir);
+                double testDistance = Math.Sqrt(Math.Pow(testLoc.X - m_TravelDestination.X, 2) + Math.Pow(testLoc.Y - m_TravelDestination.Y, 2));
+                
+                // Only try directions that move us closer
+                if (testDistance < currentDistance)
+                {
+                    Direction runningDir2 = dir | Direction.Running;
+                    if (DoMove(runningDir2))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Update movement tracking to detect if we're stuck
+        /// </summary>
+        private void UpdateMovementTracking()
+        {
+            if (m_Mobile.Location != m_LastLocation)
+            {
+                m_LastLocation = m_Mobile.Location;
+                m_LastMovementTime = DateTime.Now;
+                m_StuckAttempts = 0; // Reset stuck attempts if we moved
+            }
+        }
+
+        /// <summary>
+        /// Check if the bot appears to be stuck
+        /// </summary>
+        private bool IsStuck()
+        {
+            // Consider stuck if we haven't moved for 10 seconds while having a destination (reduced for faster detection)
+            return HasDestination() && 
+                   m_Mobile.Location == m_LastLocation && 
+                   DateTime.Now - m_LastMovementTime > TimeSpan.FromSeconds(10);
+        }
+
+
 
         public override bool Think()
         {
@@ -287,19 +600,98 @@ namespace Server.Mobiles
 
         public override bool DoActionWander()
         {
-            m_Mobile.DebugSay("I have no combatant");
-
+            // Check for combat first
             if (AquireFocusMob(m_Mobile.RangePerception, m_Mobile.FightMode, false, false, true))
             {
                 m_Mobile.DebugSay("I have detected {0}, attacking", m_Mobile.FocusMob.Name);
+                
+                // Store current destination before entering combat
+                if (HasDestination() && m_PreCombatDestination == Point3D.Zero)
+                {
+                    m_PreCombatDestination = m_TravelDestination;
+                    m_Mobile.DebugSay("Storing destination {0} before combat", m_PreCombatDestination);
+                }
+                
                 m_Mobile.Combatant = m_Mobile.FocusMob;
                 Action = ActionType.Combat;
-            }
-            else
-            {
-                base.DoActionWander();
+                return true;
             }
 
+            // Handle destination-based travel
+            if (HasDestination())
+            {
+                // Check if we've reached our destination
+                if (m_Mobile.InRange(m_TravelDestination, 5))
+                {
+                    m_Mobile.DebugSay("I have reached my destination: {0}", m_TravelDestination);
+                    ClearDestination();
+                    return true;
+                }
+
+                // Check for timeout (15 minutes - increased to give more time)
+                if (DateTime.Now - m_LastDestinationCheck > TimeSpan.FromMinutes(15))
+                {
+                    m_Mobile.DebugSay("Travel timeout reached, clearing destination");
+                    ClearDestination();
+                    return true;
+                }
+
+                // Clean old stuck locations periodically (every 5 minutes)
+                if (DateTime.Now - m_LastStuckLocationClear > TimeSpan.FromMinutes(5))
+                {
+                    m_StuckLocations.Clear();
+                    m_LastStuckLocationClear = DateTime.Now;
+                }
+
+                // Check if we're at a previously problematic location
+                if (IsAtStuckLocation())
+                {
+                    m_Mobile.DebugSay("At a stuck location, trying to escape");
+                    if (!TryEscapeStuckLocation())
+                    {
+                        m_Mobile.DebugSay("Cannot escape stuck location, abandoning destination");
+                        ClearDestination();
+                        return true;
+                    }
+                    return true;
+                }
+
+                // Always try to run when traveling - force running movement
+                bool moveSucceeded = TryRunningMovement();
+                
+                // Update movement tracking
+                UpdateMovementTracking();
+                
+                // Check if we got stuck after trying to move
+                if (IsStuck())
+                {
+                    m_Mobile.DebugSay("Detected stuck at {0}", m_Mobile.Location);
+                    AddStuckLocation(m_Mobile.Location);
+                    
+                    if (!TryEscapeStuckLocation())
+                    {
+                        m_Mobile.DebugSay("Cannot escape, abandoning destination {0}", m_TravelDestination);
+                        m_LastFailedDestination = m_TravelDestination;
+                        ClearDestination();
+                        return true;
+                    }
+                }
+                
+                if (moveSucceeded)
+                {
+                    m_Mobile.DebugSay("Running to destination: {0} (distance: {1})", m_TravelDestination, m_Mobile.GetDistanceToSqrt(m_TravelDestination));
+                }
+                else
+                {
+                    m_Mobile.DebugSay("Movement failed, will retry next tick");
+                }
+                
+                return true;
+            }
+
+            // Default wandering behavior
+            m_Mobile.DebugSay("I have no combatant or destination");
+            base.DoActionWander();
             return true;
         }
 
@@ -310,6 +702,15 @@ namespace Server.Mobiles
             if (combatant == null || combatant.Deleted || combatant.Map != m_Mobile.Map || !combatant.Alive)
             {
                 m_Mobile.DebugSay("My combatant is gone, so my guard is up");
+                
+                // Combat ended, restore pre-combat destination if we had one
+                if (m_PreCombatDestination != Point3D.Zero)
+                {
+                    m_Mobile.DebugSay("Combat ended, resuming travel to {0}", m_PreCombatDestination);
+                    SetDestination(m_PreCombatDestination);
+                    m_PreCombatDestination = Point3D.Zero; // Clear stored destination
+                }
+                
                 Action = ActionType.Wander;
                 return true;
             }
@@ -484,6 +885,15 @@ namespace Server.Mobiles
             if (m_Mobile.Hits > m_Mobile.HitsMax / 2)
             {
                 m_Mobile.DebugSay("I am stronger now, so I will wander");
+                
+                // If we were traveling before combat, restore destination
+                if (m_PreCombatDestination != Point3D.Zero)
+                {
+                    m_Mobile.DebugSay("Recovered from flee, resuming travel to {0}", m_PreCombatDestination);
+                    SetDestination(m_PreCombatDestination);
+                    m_PreCombatDestination = Point3D.Zero; // Clear stored destination
+                }
+                
                 Action = ActionType.Wander;
             }
             else

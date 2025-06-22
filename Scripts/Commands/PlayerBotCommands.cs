@@ -27,6 +27,9 @@ namespace Server.Commands
             CommandSystem.Register("SceneStatus", AccessLevel.GameMaster, new CommandEventHandler(SceneStatus_OnCommand));
             CommandSystem.Register("WarSceneTest", AccessLevel.GameMaster, new CommandEventHandler(WarSceneTest_OnCommand));
             CommandSystem.Register("FixCaravanKarma", AccessLevel.GameMaster, new CommandEventHandler(FixCaravanKarma_OnCommand));
+            CommandSystem.Register("TestLandmass", AccessLevel.GameMaster, new CommandEventHandler(TestLandmass_OnCommand));
+            CommandSystem.Register("TestCombatResume", AccessLevel.GameMaster, new CommandEventHandler(TestCombatResume_OnCommand));
+            CommandSystem.Register("TestBotTravel", AccessLevel.GameMaster, new CommandEventHandler(TestBotTravel_OnCommand));
             CommandSystem.Register("TestOrganicScenes", AccessLevel.GameMaster, new CommandEventHandler(TestOrganicScenes_OnCommand));
             CommandSystem.Register("WarEligibilityBreakdown", AccessLevel.GameMaster, new CommandEventHandler(WarEligibilityBreakdown_OnCommand));
             CommandSystem.Register("TestWarChanges", AccessLevel.GameMaster, new CommandEventHandler(TestWarChanges_OnCommand));
@@ -652,7 +655,8 @@ namespace Server.Commands
                     double distance = Math.Sqrt(Math.Pow(start.X - regionCenter.X, 2) + Math.Pow(start.Y - regionCenter.Y, 2));
                     
                     // Only consider destinations that are reasonably far away (at least 50 tiles)
-                    if (distance >= 50 && distance <= 200)
+                    // AND on the same landmass
+                    if (distance >= 50 && distance <= 200 && AreOnSameLandmass(start, regionCenter, map))
                     {
                         possibleDestinations.Add(region);
                     }
@@ -668,14 +672,91 @@ namespace Server.Commands
                     0);
             }
             
-            // Fallback: create a destination some distance away
-            int angle = Utility.Random(360);
-            int fallbackDistance = Utility.RandomMinMax(75, 150);
+            // Fallback: create a destination some distance away on same landmass
+            for (int i = 0; i < 10; i++)
+            {
+                int angle = Utility.Random(360);
+                int fallbackDistance = Utility.RandomMinMax(75, 150);
+                
+                int x = start.X + (int)(Math.Cos(angle * Math.PI / 180) * fallbackDistance);
+                int y = start.Y + (int)(Math.Sin(angle * Math.PI / 180) * fallbackDistance);
+                Point3D dest = new Point3D(x, y, start.Z);
+                
+                // Make sure fallback destination is on same landmass
+                if (AreOnSameLandmass(start, dest, map))
+                {
+                    return dest;
+                }
+            }
             
-            int x = start.X + (int)(Math.Cos(angle * Math.PI / 180) * fallbackDistance);
-            int y = start.Y + (int)(Math.Sin(angle * Math.PI / 180) * fallbackDistance);
+            return Point3D.Zero;
+        }
+
+        /// <summary>
+        /// Check if two points are on the same landmass (can be reached without crossing water)
+        /// </summary>
+        private static bool AreOnSameLandmass(Point3D start, Point3D end, Map map)
+        {
+            // For now, use predefined landmass boundaries for Trammel/Felucca
+            if (map == Map.Trammel || map == Map.Felucca)
+            {
+                return GetLandmassId(start, map) == GetLandmassId(end, map);
+            }
             
-            return new Point3D(x, y, start.Z);
+            // For other maps, assume same landmass (Ilshenar, Malas are single landmasses)
+            return true;
+        }
+
+        /// <summary>
+        /// Get landmass ID for a point on Trammel/Felucca
+        /// </summary>
+        private static int GetLandmassId(Point3D point, Map map)
+        {
+            if (map != Map.Trammel && map != Map.Felucca)
+                return 1; // Single landmass
+                
+            // Main continent (Britain, Minoc, Vesper, Trinsic, etc.)
+            if (point.X >= 0 && point.X <= 5120 && point.Y >= 0 && point.Y <= 4096)
+            {
+                // Check for major islands within the main map
+                
+                // Nujel'm island
+                if (point.X >= 3600 && point.X <= 4000 && point.Y >= 1000 && point.Y <= 1400)
+                    return 2;
+                    
+                // Moonglow island  
+                if (point.X >= 4400 && point.X <= 4700 && point.Y >= 900 && point.Y <= 1200)
+                    return 3;
+                    
+                // Magincia island
+                if (point.X >= 3650 && point.X <= 3950 && point.Y >= 2000 && point.Y <= 2300)
+                    return 4;
+                    
+                // Fire Island (near Buc's Den)
+                if (point.X >= 2200 && point.X <= 2600 && point.Y >= 1000 && point.Y <= 1400)
+                    return 5;
+                    
+                // Ice Island (Dagger Isle area)
+                if (point.X >= 3900 && point.X <= 4200 && point.Y >= 3700 && point.Y <= 4000)
+                    return 6;
+                    
+                // Skara Brae island
+                if (point.X >= 550 && point.X <= 750 && point.Y >= 2050 && point.Y <= 2250)
+                    return 7;
+                    
+                // Occllo island
+                if (point.X >= 3600 && point.X <= 3900 && point.Y >= 2600 && point.Y <= 2900)
+                    return 8;
+                    
+                // Main continent (everything else)
+                return 1;
+            }
+            
+            // Lost Lands (T2A area)
+            if (point.X >= 5120 && point.X <= 6144 && point.Y >= 2304 && point.Y <= 4096)
+                return 9; // Lost Lands
+                
+            return 1; // Default to main continent
         }
 
         [Usage("[BotSceneDebug")]
@@ -1138,6 +1219,295 @@ namespace Server.Commands
             if (fixedBots > 0)
             {
                 from.SendMessage("Caravan members should now be properly aligned and not attack each other.");
+            }
+        }
+
+        [Usage("[BotStuckDiagnostic <botName>")]
+        [Description("Show stuck detection status for a PlayerBot")]
+        public static void BotStuckDiagnostic_OnCommand(CommandEventArgs e)
+        {
+            Mobile from = e.Mobile;
+            
+            if (e.Arguments.Length < 1)
+            {
+                from.SendMessage("Usage: [BotStuckDiagnostic <botName>");
+                return;
+            }
+            
+            string botName = e.Arguments[0];
+            PlayerBot targetBot = null;
+            
+            // Find the bot
+            foreach (Mobile m in World.Mobiles.Values)
+            {
+                if (m is PlayerBot && m.Name.ToLower().Contains(botName.ToLower()))
+                {
+                    targetBot = m as PlayerBot;
+                    break;
+                }
+            }
+            
+            if (targetBot == null)
+            {
+                from.SendMessage("Could not find PlayerBot with name containing '{0}'", botName);
+                return;
+            }
+            
+            PlayerBotAI botAI = targetBot.AIObject as PlayerBotAI;
+            if (botAI == null)
+            {
+                from.SendMessage("Bot '{0}' does not have PlayerBotAI", targetBot.Name);
+                return;
+            }
+            
+            from.SendMessage(0x35, "=== Stuck Diagnostic for '{0}' ===", targetBot.Name);
+            from.SendMessage("Current Location: {0}", targetBot.Location);
+            from.SendMessage("Has Destination: {0}", botAI.HasDestination());
+            
+            if (botAI.HasDestination())
+            {
+                // We need to access private fields through reflection for diagnostic purposes
+                System.Reflection.FieldInfo destField = typeof(PlayerBotAI).GetField("m_TravelDestination", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                System.Reflection.FieldInfo lastLocField = typeof(PlayerBotAI).GetField("m_LastLocation", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                System.Reflection.FieldInfo lastMoveField = typeof(PlayerBotAI).GetField("m_LastMovementTime", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                System.Reflection.FieldInfo stuckAttemptsField = typeof(PlayerBotAI).GetField("m_StuckAttempts", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    
+                if (destField != null && lastLocField != null && lastMoveField != null && stuckAttemptsField != null)
+                {
+                    Point3D destination = (Point3D)destField.GetValue(botAI);
+                    Point3D lastLocation = (Point3D)lastLocField.GetValue(botAI);
+                    DateTime lastMovement = (DateTime)lastMoveField.GetValue(botAI);
+                    int stuckAttempts = (int)stuckAttemptsField.GetValue(botAI);
+                    
+                    from.SendMessage("Destination: {0}", destination);
+                    from.SendMessage("Distance to Destination: {0:F1}", targetBot.GetDistanceToSqrt(destination));
+                    from.SendMessage("Last Known Location: {0}", lastLocation);
+                    from.SendMessage("Last Movement Time: {0:yyyy-MM-dd HH:mm:ss}", lastMovement);
+                    from.SendMessage("Time Since Last Movement: {0:F1}s", (DateTime.Now - lastMovement).TotalSeconds);
+                    from.SendMessage("Currently at Last Location: {0}", targetBot.Location == lastLocation);
+                    
+                    bool wouldBeStuck = targetBot.Location == lastLocation && 
+                                       (DateTime.Now - lastMovement).TotalSeconds > 10; // Updated threshold
+                    from.SendMessage("Would be considered stuck: {0}", wouldBeStuck);
+                    
+                    // Check for stuck locations
+                    System.Reflection.FieldInfo stuckLocationsField = typeof(PlayerBotAI).GetField("m_StuckLocations", 
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (stuckLocationsField != null)
+                    {
+                        System.Collections.Generic.List<Point3D> stuckLocations = 
+                            (System.Collections.Generic.List<Point3D>)stuckLocationsField.GetValue(botAI);
+                        
+                        from.SendMessage("Known Stuck Locations: {0}", stuckLocations.Count);
+                        for (int i = 0; i < stuckLocations.Count && i < 3; i++)
+                        {
+                            from.SendMessage("  #{0}: {1}", i + 1, stuckLocations[i]);
+                        }
+                        if (stuckLocations.Count > 3)
+                            from.SendMessage("  ... and {0} more", stuckLocations.Count - 3);
+                            
+                        // Check if currently at a stuck location
+                        bool atStuckLocation = false;
+                        Point3D currentLoc = targetBot.Location;
+                        foreach (Point3D stuckLoc in stuckLocations)
+                        {
+                            if (Math.Abs(currentLoc.X - stuckLoc.X) <= 2 && Math.Abs(currentLoc.Y - stuckLoc.Y) <= 2)
+                            {
+                                atStuckLocation = true;
+                                break;
+                            }
+                        }
+                        from.SendMessage("At Known Stuck Location: {0}", atStuckLocation ? "YES" : "NO");
+                    }
+                }
+                else
+                {
+                    from.SendMessage("Could not access private fields for detailed diagnosis");
+                }
+            }
+            
+            from.SendMessage("Current AI Action: {0}", targetBot.AIObject.Action);
+            from.SendMessage("Combatant: {0}", targetBot.Combatant != null ? targetBot.Combatant.Name : "None");
+        }
+
+        [Usage("[TestLandmass <x> <y>")]
+        [Description("Test landmass detection for cross-island caravan prevention")]
+        public static void TestLandmass_OnCommand(CommandEventArgs e)
+        {
+            Mobile from = e.Mobile;
+            
+            from.SendMessage("=== Landmass Detection Test ===");
+            from.SendMessage("Your location: {0} on {1}", from.Location, from.Map);
+            
+            int yourLandmass = GetLandmassId(from.Location, from.Map);
+            from.SendMessage("Your landmass ID: {0} ({1})", yourLandmass, GetLandmassName(yourLandmass));
+            
+            if (e.Arguments.Length >= 2)
+            {
+                int x, y;
+                if (int.TryParse(e.Arguments[0], out x) && int.TryParse(e.Arguments[1], out y))
+                {
+                    Point3D testPoint = new Point3D(x, y, 0);
+                    int testLandmass = GetLandmassId(testPoint, from.Map);
+                    bool sameLandmass = AreOnSameLandmass(from.Location, testPoint, from.Map);
+                    
+                    from.SendMessage("Test location: {0}", testPoint);
+                    from.SendMessage("Test landmass ID: {0} ({1})", testLandmass, GetLandmassName(testLandmass));
+                    from.SendMessage("Same landmass: {0}", sameLandmass ? "YES - Caravan allowed" : "NO - Caravan blocked");
+                }
+                else
+                {
+                    from.SendMessage("Invalid coordinates. Usage: [TestLandmass <x> <y>");
+                }
+            }
+            else
+            {
+                from.SendMessage("Usage: [TestLandmass <x> <y>");
+                from.SendMessage("Examples:");
+                from.SendMessage("  Britain to Vesper: [TestLandmass 2890 730 (should be same landmass)");
+                from.SendMessage("  Britain to Nujel'm: [TestLandmass 3800 1200 (should be different landmass)");
+                from.SendMessage("  Britain to Moonglow: [TestLandmass 4550 1050 (should be different landmass)");
+                from.SendMessage("  Britain to Skara Brae: [TestLandmass 650 2150 (should be different landmass)");
+                from.SendMessage("  Britain to Occllo: [TestLandmass 3750 2750 (should be different landmass)");
+            }
+        }
+
+        private static string GetLandmassName(int landmassId)
+        {
+            switch (landmassId)
+            {
+                case 1: return "Main Continent";
+                case 2: return "Nujel'm Island";
+                case 3: return "Moonglow Island";
+                case 4: return "Magincia Island";
+                case 5: return "Fire Island";
+                case 6: return "Ice Island";
+                case 7: return "Skara Brae Island";
+                case 8: return "Occllo Island";
+                case 9: return "Lost Lands";
+                default: return "Unknown";
+            }
+        }
+
+        [Usage("[TestCombatResume <botName>")]
+        [Description("Test PlayerBot combat destination preservation by forcing combat")]
+        public static void TestCombatResume_OnCommand(CommandEventArgs e)
+        {
+            Mobile from = e.Mobile;
+            
+            if (e.Arguments.Length < 1)
+            {
+                from.SendMessage("Usage: [TestCombatResume <botName>");
+                return;
+            }
+            
+            string botName = e.Arguments[0];
+            PlayerBot targetBot = null;
+            
+            // Find the bot
+            foreach (Mobile m in World.Mobiles.Values)
+            {
+                if (m is PlayerBot && m.Name.ToLower().Contains(botName.ToLower()))
+                {
+                    targetBot = m as PlayerBot;
+                    break;
+                }
+            }
+            
+            if (targetBot == null)
+            {
+                from.SendMessage("Could not find PlayerBot with name containing '{0}'", botName);
+                return;
+            }
+            
+            PlayerBotAI botAI = targetBot.AIObject as PlayerBotAI;
+            if (botAI == null)
+            {
+                from.SendMessage("Bot '{0}' does not have PlayerBotAI", targetBot.Name);
+                return;
+            }
+            
+            // Check if bot has a destination
+            if (!botAI.HasDestination())
+            {
+                from.SendMessage("Bot '{0}' has no current destination. Use [TestBotTravel first.", targetBot.Name);
+                return;
+            }
+            
+            // Force the bot to attack the player to test combat preservation
+            targetBot.Combatant = from;
+            targetBot.AIObject.Action = ActionType.Combat;
+            
+            from.SendMessage("Forced '{0}' into combat. The bot should resume its destination after combat ends.", targetBot.Name);
+        }
+
+        [Usage("[TestBotTravel <botName> <x> <y> [z]")]
+        [Description("Test PlayerBot destination-based travel system")]
+        public static void TestBotTravel_OnCommand(CommandEventArgs e)
+        {
+            Mobile from = e.Mobile;
+            
+            if (e.Arguments.Length < 3)
+            {
+                from.SendMessage("Usage: [TestBotTravel <botName> <x> <y> [z]");
+                return;
+            }
+            
+            string botName = e.Arguments[0];
+            int x, y, z = 0;
+            
+            if (!int.TryParse(e.Arguments[1], out x) || !int.TryParse(e.Arguments[2], out y))
+            {
+                from.SendMessage("Invalid coordinates. Usage: [TestBotTravel <botName> <x> <y> [z]");
+                return;
+            }
+            
+            if (e.Arguments.Length > 3)
+            {
+                int.TryParse(e.Arguments[3], out z);
+            }
+            
+            // Find the bot
+            PlayerBot targetBot = null;
+            foreach (Mobile mobile in World.Mobiles.Values)
+            {
+                if (mobile is PlayerBot && mobile.Name.ToLower().Contains(botName.ToLower()))
+                {
+                    targetBot = mobile as PlayerBot;
+                    break;
+                }
+            }
+            
+            if (targetBot == null)
+            {
+                from.SendMessage("Could not find a PlayerBot with name containing '{0}'", botName);
+                return;
+            }
+            
+            Point3D destination = new Point3D(x, y, z);
+            
+            // Set the destination
+            if (targetBot.AIObject != null)
+            {
+                PlayerBotAI playerBotAI = targetBot.AIObject as PlayerBotAI;
+                if (playerBotAI != null)
+                {
+                    playerBotAI.SetDestination(destination);
+                    targetBot.AIObject.Action = ActionType.Wander;
+                    from.SendMessage("Set destination {0} for bot '{1}' at {2}", destination, targetBot.Name, targetBot.Location);
+                }
+                else
+                {
+                    from.SendMessage("Bot '{0}' does not have PlayerBotAI", targetBot.Name);
+                }
+            }
+            else
+            {
+                from.SendMessage("Bot '{0}' has no AI object", targetBot.Name);
             }
         }
 

@@ -391,8 +391,8 @@ namespace Server.Engines.Scenes
 
         private void MoveCaravan()
         {
-            // Only move every 10 seconds to simulate slow travel
-            if (DateTime.Now - m_LastMovement < TimeSpan.FromSeconds(10))
+            // Only update destinations every 30 seconds to allow AI time to move
+            if (DateTime.Now - m_LastMovement < TimeSpan.FromSeconds(30))
                 return;
 
             if (m_CurrentWaypointIndex >= m_Waypoints.Count)
@@ -400,8 +400,25 @@ namespace Server.Engines.Scenes
 
             Point3D targetWaypoint = m_Waypoints[m_CurrentWaypointIndex];
             
-            // Check if close to current waypoint
-            if (GetDistance(m_Center, targetWaypoint) < 5)
+            // Check if caravan members are close to current waypoint
+            bool nearWaypoint = true;
+            List<PlayerBot> allBots = new List<PlayerBot>();
+            allBots.AddRange(m_Guards);
+            allBots.AddRange(m_Merchants);
+            
+            foreach (PlayerBot member in allBots)
+            {
+                if (member != null && !member.Deleted)
+                {
+                    if (GetDistance(member.Location, targetWaypoint) > 10)
+                    {
+                        nearWaypoint = false;
+                        break;
+                    }
+                }
+            }
+            
+            if (nearWaypoint)
             {
                 m_CurrentWaypointIndex++;
                 if (m_CurrentWaypointIndex < m_Waypoints.Count)
@@ -414,50 +431,66 @@ namespace Server.Engines.Scenes
                 }
             }
 
-            // Move all caravan members towards the waypoint
+            // Set new destinations for all caravan members
             MoveTowardsTarget(targetWaypoint);
             m_LastMovement = DateTime.Now;
         }
 
         private void MoveTowardsTarget(Point3D target)
         {
-            // Calculate movement direction
-            int deltaX = target.X - m_Center.X;
-            int deltaY = target.Y - m_Center.Y;
-            
-            // Normalize to 1-2 tile movement
-            if (deltaX != 0) deltaX = deltaX > 0 ? 1 : -1;
-            if (deltaY != 0) deltaY = deltaY > 0 ? 1 : -1;
-            
-            Point3D newCenter = new Point3D(
-                m_Center.X + deltaX,
-                m_Center.Y + deltaY,
-                m_Map.GetAverageZ(m_Center.X + deltaX, m_Center.Y + deltaY)
-            );
+            // Update center position towards target
+            m_Center = target;
 
-            // Update center
-            m_Center = newCenter;
+            // Set AI destinations for all caravan members to move towards the target
+            List<PlayerBot> allBots = new List<PlayerBot>();
+            allBots.AddRange(m_Guards);
+            allBots.AddRange(m_Merchants);
 
-            // Move all caravan members
-            List<Mobile> allMembers = new List<Mobile>();
-            allMembers.AddRange(m_Guards);
-            allMembers.AddRange(m_Merchants);
-            allMembers.AddRange(m_PackAnimals);
-
-            foreach (Mobile member in allMembers)
+            foreach (PlayerBot member in allBots)
             {
                 if (member == null || member.Deleted) continue;
 
-                Point3D newPos = new Point3D(
-                    member.X + deltaX,
-                    member.Y + deltaY,
-                    m_Map.GetAverageZ(member.X + deltaX, member.Y + deltaY)
+                // Set destination for the bot's AI
+                if (member.AIObject != null)
+                {
+                    PlayerBotAI playerBotAI = member.AIObject as PlayerBotAI;
+                    if (playerBotAI != null)
+                    {
+                        // Create a destination near the target with some formation spread
+                        Point3D memberTarget = new Point3D(
+                            target.X + Utility.RandomMinMax(-3, 3),
+                            target.Y + Utility.RandomMinMax(-3, 3),
+                            target.Z
+                        );
+                        
+                        playerBotAI.SetDestination(memberTarget);
+                        member.AIObject.Action = ActionType.Wander;
+                    }
+                }
+            }
+
+            // Move pack animals directly (they don't have PlayerBotAI)
+            foreach (PackHorse animal in m_PackAnimals)
+            {
+                if (animal == null || animal.Deleted) continue;
+
+                Point3D animalTarget = new Point3D(
+                    target.X + Utility.RandomMinMax(-2, 2),
+                    target.Y + Utility.RandomMinMax(-2, 2),
+                    m_Map.GetAverageZ(target.X, target.Y)
                 );
 
-                if (m_Map.CanSpawnMobile(newPos.X, newPos.Y, newPos.Z))
+                // Use the animal's AI to move towards target
+                if (animal.AIObject != null)
                 {
-                    member.MoveToWorld(newPos, m_Map);
-                    member.Direction = GetDirectionTo(target);
+                    animal.AIObject.Action = ActionType.Wander;
+                    // For animals, we'll use the traditional approach since they don't have PlayerBotAI
+                    if (!animal.InRange(animalTarget, 5))
+                    {
+                        Direction dir = animal.GetDirectionTo(animalTarget);
+                        Direction runningDir = dir | Direction.Running; // Pack animals should also run to keep up
+                        animal.AIObject.DoMove(runningDir);
+                    }
                 }
             }
         }
