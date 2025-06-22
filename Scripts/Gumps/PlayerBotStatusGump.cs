@@ -173,17 +173,33 @@ namespace Server.Gumps
             AddHtml(210, y, 520, 20, Color(Center("Population Statistics"), SelectedColor32), false, false);
             y += 30;
 
-            int totalBots = director.GetRegisteredBotCount();
-            AddLabel(220, y, LabelHue, "Total Active Bots:");
-            AddLabel(400, y, totalBots > 0 ? GreenHue : RedHue, totalBots.ToString());
+            int registeredBots = director.GetRegisteredBotCount();
+            int worldBots = director.GetWorldPlayerBotCount();
+            
+            AddLabel(220, y, LabelHue, "Registered Bots:");
+            AddLabel(400, y, registeredBots > 0 ? GreenHue : RedHue, registeredBots.ToString());
             y += 20;
+
+            AddLabel(220, y, LabelHue, "World Total Bots:");
+            int countHue = (worldBots == registeredBots) ? GreenHue : YellowHue;
+            AddLabel(400, y, countHue, worldBots.ToString());
+            y += 20;
+
+            if (worldBots != registeredBots)
+            {
+                int unmanagedCount = worldBots - registeredBots;
+                AddLabel(220, y, RedHue, "Unmanaged Bots:");
+                AddLabel(400, y, RedHue, unmanagedCount.ToString());
+                AddLabel(450, y, RedHue, "(Use [BotDiagnostic)");
+                y += 20;
+            }
 
             AddLabel(220, y, LabelHue, "Global Capacity:");
             AddLabel(400, y, LabelHue, config.GlobalCap.ToString());
             y += 20;
 
             AddLabel(220, y, LabelHue, "Utilization:");
-            double utilization = config.GlobalCap > 0 ? (double)totalBots / config.GlobalCap * 100.0 : 0.0;
+            double utilization = config.GlobalCap > 0 ? (double)registeredBots / config.GlobalCap * 100.0 : 0.0;
             int utilizationHue = utilization > 90 ? RedHue : (utilization > 75 ? YellowHue : GreenHue);
             AddLabel(400, y, utilizationHue, String.Format("{0:F1}%", utilization));
             y += 30;
@@ -261,7 +277,11 @@ namespace Server.Gumps
             y += 25;
 
             AddButtonLabeled(220, y, GetButtonID(9, 2), "Delete All Bots");
-            AddButtonLabeled(450, y, GetButtonID(9, 3), "Export Statistics");
+            AddButtonLabeled(450, y, GetButtonID(9, 3), "Fix Unmanaged Bots");
+            y += 25;
+
+            AddButtonLabeled(220, y, GetButtonID(9, 4), "Run Diagnostic");
+            AddButtonLabeled(450, y, GetButtonID(9, 5), "Export Statistics");
         }
 
         private void AddBotListPage()
@@ -908,7 +928,38 @@ namespace Server.Gumps
                             }
                             notice = String.Format("Deleted {0} PlayerBots.", deleteCount);
                             break;
-                        case 3: // Export Statistics
+                        case 3: // Fix Unmanaged Bots
+                            try
+                            {
+                                int fixedCount = PlayerBotDirector.Instance.ForceRegisterUnmanagedBots();
+                                if (fixedCount > 0)
+                                    notice = String.Format("Registered {0} unmanaged PlayerBot(s).", fixedCount);
+                                else
+                                    notice = "No unmanaged PlayerBots found.";
+                            }
+                            catch (Exception ex)
+                            {
+                                notice = "Error fixing unmanaged bots: " + ex.Message;
+                            }
+                            break;
+                        case 4: // Run Diagnostic
+                            try
+                            {
+                                int worldCount = PlayerBotDirector.Instance.GetWorldPlayerBotCount();
+                                int registeredCount = PlayerBotDirector.Instance.GetRegisteredBotCount();
+                                int unmanagedCount = worldCount - registeredCount;
+                                
+                                if (unmanagedCount == 0)
+                                    notice = String.Format("Diagnostic complete: All {0} PlayerBots are properly managed.", worldCount);
+                                else
+                                    notice = String.Format("Diagnostic complete: {0} managed, {1} unmanaged bots found.", registeredCount, unmanagedCount);
+                            }
+                            catch (Exception ex)
+                            {
+                                notice = "Error running diagnostic: " + ex.Message;
+                            }
+                            break;
+                        case 5: // Export Statistics
                             notice = "Statistics export not yet implemented.";
                             break;
                     }

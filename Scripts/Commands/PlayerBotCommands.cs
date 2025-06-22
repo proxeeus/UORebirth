@@ -16,6 +16,8 @@ namespace Server.Commands
             CommandSystem.Register("BotInfo", AccessLevel.GameMaster, new CommandEventHandler(BotInfo_OnCommand));
             CommandSystem.Register("SpawnBot", AccessLevel.GameMaster, new CommandEventHandler(SpawnBot_OnCommand));
             CommandSystem.Register("DeleteBots", AccessLevel.Administrator, new CommandEventHandler(DeleteBots_OnCommand));
+            CommandSystem.Register("BotDiagnostic", AccessLevel.Administrator, new CommandEventHandler(BotDiagnostic_OnCommand));
+            CommandSystem.Register("FixUnmanagedBots", AccessLevel.Administrator, new CommandEventHandler(FixUnmanagedBots_OnCommand));
         }
 
         [Usage("ReloadBotConfig")]
@@ -237,6 +239,81 @@ namespace Server.Commands
         }
 
         #region Helper Methods
+        [Usage("BotDiagnostic")]
+        [Description("Runs diagnostic checks on the PlayerBot system to identify issues.")]
+        public static void BotDiagnostic_OnCommand(CommandEventArgs e)
+        {
+            Mobile from = e.Mobile;
+            
+            from.SendMessage(0x35, "=== PlayerBot System Diagnostic ===");
+            
+            // Get counts
+            int worldCount = PlayerBotDirector.Instance.GetWorldPlayerBotCount();
+            int registeredCount = PlayerBotDirector.Instance.GetRegisteredBotCount();
+            List<PlayerBot> unmanaged = PlayerBotDirector.Instance.GetUnmanagedPlayerBots();
+            
+            from.SendMessage("Total PlayerBots in world: {0}", worldCount);
+            from.SendMessage("Registered with director: {0}", registeredCount);
+            from.SendMessage("Unmanaged bots: {0}", unmanaged.Count);
+            
+            if (unmanaged.Count > 0)
+            {
+                from.SendMessage(0x25, "WARNING: Found {0} unmanaged PlayerBot(s)!", unmanaged.Count);
+                from.SendMessage("These bots exist in the world but are not managed by the director.");
+                from.SendMessage("Use [FixUnmanagedBots to register them automatically.");
+                
+                if (unmanaged.Count <= 10)
+                {
+                    from.SendMessage("Unmanaged bots:");
+                    foreach (PlayerBot bot in unmanaged)
+                    {
+                        from.SendMessage("  - {0} (Serial: {1}) at {2}", bot.Name, bot.Serial, bot.Location);
+                    }
+                }
+                else
+                {
+                    from.SendMessage("Too many unmanaged bots to list individually ({0} total).", unmanaged.Count);
+                }
+            }
+            else
+            {
+                from.SendMessage(0x40, "All PlayerBots are properly managed by the director.");
+            }
+            
+            // Additional diagnostics
+            from.SendMessage("=== Additional Information ===");
+            from.SendMessage("Director initialized: {0}", PlayerBotDirector.Instance != null ? "Yes" : "No");
+            from.SendMessage("Configuration loaded: {0}", PlayerBotConfigurationManager.LastLoadTime.ToString("yyyy-MM-dd HH:mm:ss"));
+            from.SendMessage("Active regions: {0}", GetActiveRegionCount());
+        }
+
+        [Usage("FixUnmanagedBots")]
+        [Description("Automatically registers all unmanaged PlayerBots with the director.")]
+        public static void FixUnmanagedBots_OnCommand(CommandEventArgs e)
+        {
+            Mobile from = e.Mobile;
+            
+            from.SendMessage("Scanning for unmanaged PlayerBots...");
+            
+            int fixedCount = PlayerBotDirector.Instance.ForceRegisterUnmanagedBots();
+            
+            if (fixedCount > 0)
+            {
+                from.SendMessage(0x40, "Successfully registered {0} previously unmanaged PlayerBot(s).", fixedCount);
+                from.SendMessage("All PlayerBots should now be properly managed by the director.");
+            }
+            else
+            {
+                from.SendMessage("No unmanaged PlayerBots found. All bots are already properly registered.");
+            }
+            
+            // Show final counts
+            int worldCount = PlayerBotDirector.Instance.GetWorldPlayerBotCount();
+            int registeredCount = PlayerBotDirector.Instance.GetRegisteredBotCount();
+            
+            from.SendMessage("Final counts - World: {0}, Registered: {1}", worldCount, registeredCount);
+        }
+
         private static int GetActiveRegionCount()
         {
             int count = 0;

@@ -174,6 +174,10 @@ namespace Server.Engines
         {
             // Accessing Instance forces the singleton to construct and start the timer.
             PlayerBotDirector unused = Instance;
+            
+            // CRITICAL: Register any PlayerBots that were deserialized before the director was initialized
+            Instance.RegisterExistingPlayerBots();
+            
             Console.WriteLine("[{0}] [PlayerBotDirector] Initialized (phase 1 + 2) - Debug mode: {1}", GetTimestamp(), Config.EnableLogging ? "ON" : "OFF");
         }
 
@@ -188,6 +192,15 @@ namespace Server.Engines
 
             lock (m_RegistryLock)
             {
+                // Avoid duplicate registrations
+                if (m_RegisteredBots.ContainsKey(bot.Serial))
+                {
+                    if (Config.EnableLogging && Config.VerboseSpawning)
+                        Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' (Serial: {2}) already registered, skipping", 
+                            GetTimestamp(), bot.Name, bot.Serial);
+                    return;
+                }
+
                 PlayerBotInfo info = new PlayerBotInfo(bot);
                 m_RegisteredBots[bot.Serial] = info;
                 
@@ -221,6 +234,43 @@ namespace Server.Engines
         }
 
         /// <summary>
+        /// Register any existing PlayerBots that were deserialized before the director was initialized
+        /// This fixes the "unmanaged bots" issue during server startup
+        /// </summary>
+        private void RegisterExistingPlayerBots()
+        {
+            int registeredCount = 0;
+            int alreadyRegisteredCount = 0;
+            
+            foreach (Mobile mobile in World.Mobiles.Values)
+            {
+                PlayerBot bot = mobile as PlayerBot;
+                if (bot != null && !bot.Deleted)
+                {
+                    lock (m_RegistryLock)
+                    {
+                        if (!m_RegisteredBots.ContainsKey(bot.Serial))
+                        {
+                            PlayerBotInfo info = new PlayerBotInfo(bot);
+                            m_RegisteredBots[bot.Serial] = info;
+                            registeredCount++;
+                        }
+                        else
+                        {
+                            alreadyRegisteredCount++;
+                        }
+                    }
+                }
+            }
+            
+            if (Config.EnableLogging)
+            {
+                Console.WriteLine("[{0}] [PlayerBotDirector] Post-deserialization registration sweep: {1} newly registered, {2} already registered", 
+                    GetTimestamp(), registeredCount, alreadyRegisteredCount);
+            }
+        }
+
+        /// <summary>
         /// Get current registered bot count (thread-safe)
         /// </summary>
         public int GetRegisteredBotCount()
@@ -229,6 +279,60 @@ namespace Server.Engines
             {
                 return m_RegisteredBots.Count;
             }
+        }
+
+        /// <summary>
+        /// Get total PlayerBot count in the world (for comparison with registered count)
+        /// </summary>
+        public int GetWorldPlayerBotCount()
+        {
+            int count = 0;
+            foreach (Mobile mobile in World.Mobiles.Values)
+            {
+                if (mobile is PlayerBot && !mobile.Deleted)
+                    count++;
+            }
+            return count;
+        }
+
+        /// <summary>
+        /// Diagnostic method to identify unmanaged PlayerBots
+        /// </summary>
+        public List<PlayerBot> GetUnmanagedPlayerBots()
+        {
+            List<PlayerBot> unmanaged = new List<PlayerBot>();
+            
+            foreach (Mobile mobile in World.Mobiles.Values)
+            {
+                PlayerBot bot = mobile as PlayerBot;
+                if (bot != null && !bot.Deleted)
+                {
+                    lock (m_RegistryLock)
+                    {
+                        if (!m_RegisteredBots.ContainsKey(bot.Serial))
+                        {
+                            unmanaged.Add(bot);
+                        }
+                    }
+                }
+            }
+            
+            return unmanaged;
+        }
+
+        /// <summary>
+        /// Force registration of all unmanaged PlayerBots (admin command helper)
+        /// </summary>
+        public int ForceRegisterUnmanagedBots()
+        {
+            List<PlayerBot> unmanaged = GetUnmanagedPlayerBots();
+            
+            foreach (PlayerBot bot in unmanaged)
+            {
+                RegisterBot(bot);
+            }
+            
+            return unmanaged.Count;
         }
 
         /// <summary>
