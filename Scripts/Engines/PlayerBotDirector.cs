@@ -114,24 +114,13 @@ namespace Server.Engines
         public static PlayerBotDirector Instance { get { return m_Instance; } }
         #endregion
 
-        #region Configuration Constants
-        private const int GLOBAL_CAP = 200;            // Absolute maximum bots allowed shard-wide
-        private const int POPULATION_TICK_SECONDS = 30; // How often to evaluate population
-        private const int SPAWN_LOCATION_ATTEMPTS = 20; // Max attempts to find spawn location
-        private const int STARTUP_DELAY_SECONDS = 10;   // Delay before first population tick
-        
-        // Phase 2: Travel & Behavior Constants
-        private const int BEHAVIOR_TICK_SECONDS = 45;   // How often to evaluate bot behaviors
-        private const int TRAVEL_CHANCE_PERCENT = 15;   // Chance per behavior tick that a bot will travel
-        private const int INTERACTION_CHANCE_PERCENT = 25; // Chance per behavior tick that bots will interact
-        private const int MIN_TRAVEL_DISTANCE = 10;     // Minimum tiles to travel
-        private const int MAX_TRAVEL_DISTANCE = 50;     // Maximum tiles to travel
-        private const int INTER_REGION_TRAVEL_CHANCE = 5; // Chance for long-distance travel between regions
-        private const int SHOP_VISIT_CHANCE = 10;       // Chance to visit shops in cities
-        private const int DYNAMIC_EVENT_CHANCE = 3;     // Chance for dynamic events per behavior tick
-        
-        // Debug toggle - set to false to disable verbose logging
-        private static bool DEBUG_ENABLED = true;
+        #region Configuration Properties
+        // Configuration is now loaded from files via PlayerBotConfigurationManager
+        // These properties provide easy access to current settings
+        private static PlayerBotConfigurationManager.BehaviorConfig Config
+        {
+            get { return PlayerBotConfigurationManager.BehaviorSettings; }
+        }
         #endregion
 
         #region Private Fields
@@ -153,23 +142,27 @@ namespace Server.Engines
 
         private PlayerBotDirector()
         {
+            // Initialize configuration system first
+            PlayerBotConfigurationManager.Initialize();
+            
             m_Regions = new List<RegionProfile>();
             m_RegisteredBots = new Dictionary<Serial, PlayerBotInfo>();
             m_PointsOfInterest = new List<PointOfInterest>();
             
-            SeedDefaultRegions();
-            SeedPointsOfInterest();
+            // Load regions and POIs from configuration files
+            LoadRegionsFromConfig();
+            LoadPointsOfInterestFromConfig();
 
-            // Phase 1: Population management timer
-            m_Timer = Timer.DelayCall(TimeSpan.FromSeconds(STARTUP_DELAY_SECONDS), TimeSpan.FromSeconds(POPULATION_TICK_SECONDS), new TimerCallback(OnPopulationTick));
+            // Phase 1: Population management timer (using config values)
+            m_Timer = Timer.DelayCall(TimeSpan.FromSeconds(Config.StartupDelaySeconds), TimeSpan.FromSeconds(Config.PopulationTickSeconds), new TimerCallback(OnPopulationTick));
             
             // Phase 2: Behavior management timer (starts a bit later to let population stabilize)
-            m_BehaviorTimer = Timer.DelayCall(TimeSpan.FromSeconds(STARTUP_DELAY_SECONDS + 15), TimeSpan.FromSeconds(BEHAVIOR_TICK_SECONDS), new TimerCallback(OnBehaviorTick));
+            m_BehaviorTimer = Timer.DelayCall(TimeSpan.FromSeconds(Config.StartupDelaySeconds + 15), TimeSpan.FromSeconds(Config.BehaviorTickSeconds), new TimerCallback(OnBehaviorTick));
             
-            if (DEBUG_ENABLED)
+            if (Config.EnableLogging)
             {
                 Console.WriteLine("[{0}] [PlayerBotDirector] Constructor completed. Population timer starts in {1}s, behavior timer in {2}s", 
-                    GetTimestamp(), STARTUP_DELAY_SECONDS, STARTUP_DELAY_SECONDS + 15);
+                    GetTimestamp(), Config.StartupDelaySeconds, Config.StartupDelaySeconds + 15);
             }
         }
 
@@ -178,7 +171,7 @@ namespace Server.Engines
         {
             // Accessing Instance forces the singleton to construct and start the timer.
             PlayerBotDirector unused = Instance;
-            Console.WriteLine("[{0}] [PlayerBotDirector] Initialized (phase 1 + 2) - Debug mode: {1}", GetTimestamp(), DEBUG_ENABLED ? "ON" : "OFF");
+            Console.WriteLine("[{0}] [PlayerBotDirector] Initialized (phase 1 + 2) - Debug mode: {1}", GetTimestamp(), Config.EnableLogging ? "ON" : "OFF");
         }
 
         #region Bot Registration System
@@ -195,7 +188,7 @@ namespace Server.Engines
                 PlayerBotInfo info = new PlayerBotInfo(bot);
                 m_RegisteredBots[bot.Serial] = info;
                 
-                if (DEBUG_ENABLED)
+                if (Config.EnableLogging && Config.VerboseSpawning)
                     Console.WriteLine("[{0}] [PlayerBotDirector] Registered bot '{1}' (Serial: {2}) - Total registered: {3}", 
                         GetTimestamp(), bot.Name, bot.Serial, m_RegisteredBots.Count);
             }
@@ -217,7 +210,7 @@ namespace Server.Engines
                     TimeSpan lifespan = DateTime.Now - info.SpawnTime;
                     m_RegisteredBots.Remove(bot.Serial);
                     
-                    if (DEBUG_ENABLED)
+                    if (Config.EnableLogging && Config.VerboseSpawning)
                         Console.WriteLine("[{0}] [PlayerBotDirector] Unregistered bot '{1}' (Serial: {2}) - Lived for {3} - Total registered: {4}", 
                             GetTimestamp(), bot.Name, bot.Serial, FormatTimeSpan(lifespan), m_RegisteredBots.Count);
                 }
@@ -310,7 +303,7 @@ namespace Server.Engines
                     TimeSpan lifespan = DateTime.Now - info.SpawnTime;
                     m_RegisteredBots.Remove(serial);
                     
-                    if (DEBUG_ENABLED)
+                    if (Config.EnableLogging && Config.VerboseSpawning)
                         Console.WriteLine("[{0}] [PlayerBotDirector] Cleaned up stale registration (Serial: {1}) - Lived for {2} - Total registered: {3}", 
                             GetTimestamp(), serial, FormatTimeSpan(lifespan), m_RegisteredBots.Count);
                 }
@@ -331,32 +324,25 @@ namespace Server.Engines
         #endregion
 
         /// <summary>
-        /// Defines the regions of Britannia (Felucca/Trammel) we want to keep populated.
-        /// For phase 1 we hard-code a handful. This will be moved to an external cfg later.
+        /// Load regions from configuration files instead of hardcoded values
         /// </summary>
-        private void SeedDefaultRegions()
+        private void LoadRegionsFromConfig()
         {
-            if (DEBUG_ENABLED)
-                Console.WriteLine("[{0}] [PlayerBotDirector] Seeding default regions...", GetTimestamp());
+            if (Config.EnableLogging && Config.VerboseSpawning)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Loading regions from configuration...", GetTimestamp());
 
-            // Britain city core (bank + surrounding streets)
-            Server.Rectangle2D britainArea = new Server.Rectangle2D(1416, 1675, 60, 60);
-            RegionProfile britainProfile = new RegionProfile("Britain", Map.Felucca, britainArea, 6, 15);
-            m_Regions.Add(britainProfile);
-
-            // Yew forest north of town gate
-            Server.Rectangle2D yewArea = new Server.Rectangle2D(632, 752, 200, 200);
-            RegionProfile yewProfile = new RegionProfile("Yew Woods", Map.Felucca, yewArea, 4, 12);
-            m_Regions.Add(yewProfile);
-
-            // Despise level 1 (rough rectangle around entrance area)
-            Server.Rectangle2D despiseArea = new Server.Rectangle2D(553, 1459, 100, 100);
-            RegionProfile despiseProfile = new RegionProfile("Despise L1", Map.Felucca, despiseArea, 8, 18);
-            m_Regions.Add(despiseProfile);
-
-            if (DEBUG_ENABLED)
+            foreach (PlayerBotConfigurationManager.RegionConfig regionConfig in PlayerBotConfigurationManager.Regions.Values)
             {
-                Console.WriteLine("[{0}] [PlayerBotDirector] Seeded {1} regions:", GetTimestamp(), m_Regions.Count);
+                if (regionConfig.Active)
+                {
+                    RegionProfile profile = new RegionProfile(regionConfig.Name, regionConfig.Map, regionConfig.Bounds, regionConfig.MinBots, regionConfig.MaxBots);
+                    m_Regions.Add(profile);
+                }
+            }
+
+            if (Config.EnableLogging && Config.VerboseSpawning)
+            {
+                Console.WriteLine("[{0}] [PlayerBotDirector] Loaded {1} active regions:", GetTimestamp(), m_Regions.Count);
                 foreach (RegionProfile profile in m_Regions)
                 {
                     Console.WriteLine("[{0}]   - {1} on {2}: {3}x{4} area, target {5}-{6} bots", 
@@ -368,36 +354,36 @@ namespace Server.Engines
         }
 
         /// <summary>
-        /// Seed points of interest for bot behavior and travel destinations
+        /// Load points of interest from configuration files instead of hardcoded values
         /// </summary>
-        private void SeedPointsOfInterest()
+        private void LoadPointsOfInterestFromConfig()
         {
-            if (DEBUG_ENABLED)
-                Console.WriteLine("[{0}] [PlayerBotDirector] Seeding points of interest...", GetTimestamp());
+            if (Config.EnableLogging && Config.VerboseBehaviors)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Loading points of interest from configuration...", GetTimestamp());
 
-            // Britain POIs
-            m_PointsOfInterest.Add(new PointOfInterest("Britain Bank", Map.Felucca, new Point3D(1434, 1699, 0), POIType.Bank));
-            m_PointsOfInterest.Add(new PointOfInterest("Britain Blacksmith", Map.Felucca, new Point3D(1420, 1634, 0), POIType.Shop));
-            m_PointsOfInterest.Add(new PointOfInterest("Britain Tavern", Map.Felucca, new Point3D(1462, 1607, 0), POIType.Tavern));
-            m_PointsOfInterest.Add(new PointOfInterest("Britain Healer", Map.Felucca, new Point3D(1482, 1612, 0), POIType.Healer));
-            m_PointsOfInterest.Add(new PointOfInterest("Britain Mage Shop", Map.Felucca, new Point3D(1492, 1629, 0), POIType.Shop));
-
-            // Yew POIs
-            m_PointsOfInterest.Add(new PointOfInterest("Yew Bank", Map.Felucca, new Point3D(771, 752, 0), POIType.Bank));
-            m_PointsOfInterest.Add(new PointOfInterest("Yew Winery", Map.Felucca, new Point3D(692, 858, 0), POIType.Tavern));
-            m_PointsOfInterest.Add(new PointOfInterest("Yew Abbey", Map.Felucca, new Point3D(654, 858, 0), POIType.Landmark));
-
-            // Despise POIs
-            m_PointsOfInterest.Add(new PointOfInterest("Despise Entrance", Map.Felucca, new Point3D(514, 1560, 0), POIType.Dungeon));
-            m_PointsOfInterest.Add(new PointOfInterest("Despise Level 1", Map.Felucca, new Point3D(553, 1459, 0), POIType.Dungeon));
-
-            // Travel waypoints between regions
-            m_PointsOfInterest.Add(new PointOfInterest("Britain-Yew Road", Map.Felucca, new Point3D(1200, 1000, 0), POIType.Waypoint));
-            m_PointsOfInterest.Add(new PointOfInterest("Yew-Despise Path", Map.Felucca, new Point3D(600, 1200, 0), POIType.Waypoint));
-
-            if (DEBUG_ENABLED)
+            foreach (PlayerBotConfigurationManager.POIConfig poiConfig in PlayerBotConfigurationManager.PointsOfInterest.Values)
             {
-                Console.WriteLine("[{0}] [PlayerBotDirector] Seeded {1} points of interest:", GetTimestamp(), m_PointsOfInterest.Count);
+                // Only load POIs for active regions
+                bool regionActive = false;
+                foreach (PlayerBotConfigurationManager.RegionConfig regionConfig in PlayerBotConfigurationManager.Regions.Values)
+                {
+                    if (regionConfig.Name == poiConfig.Region && regionConfig.Active)
+                    {
+                        regionActive = true;
+                        break;
+                    }
+                }
+
+                if (regionActive || string.IsNullOrEmpty(poiConfig.Region)) // Include regionless POIs (waypoints)
+                {
+                    PointOfInterest poi = new PointOfInterest(poiConfig.Name, poiConfig.Map, poiConfig.Location, poiConfig.Type);
+                    m_PointsOfInterest.Add(poi);
+                }
+            }
+
+            if (Config.EnableLogging && Config.VerboseBehaviors)
+            {
+                Console.WriteLine("[{0}] [PlayerBotDirector] Loaded {1} points of interest:", GetTimestamp(), m_PointsOfInterest.Count);
                 foreach (PointOfInterest poi in m_PointsOfInterest)
                 {
                     Console.WriteLine("[{0}]   - {1} ({2}) at {3}", 
@@ -411,20 +397,20 @@ namespace Server.Engines
         {
             try
             {
-                if (DEBUG_ENABLED)
+                if (Config.EnableLogging)
                     Console.WriteLine("[{0}] [PlayerBotDirector] === Population Tick Started ===", GetTimestamp());
 
                 // Clean up any stale registrations first
                 CleanupStaleRegistrations();
 
                 int totalRegistered = GetRegisteredBotCount();
-                if (DEBUG_ENABLED)
-                    Console.WriteLine("[{0}] [PlayerBotDirector] Found {1} registered PlayerBots (global cap: {2})", GetTimestamp(), totalRegistered, GLOBAL_CAP);
+                if (Config.EnableLogging)
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Found {1} registered PlayerBots (global cap: {2})", GetTimestamp(), totalRegistered, Config.GlobalCap);
 
                 // Global cap guard
-                if (totalRegistered >= GLOBAL_CAP)
+                if (totalRegistered >= Config.GlobalCap)
                 {
-                    if (DEBUG_ENABLED)
+                    if (Config.EnableLogging)
                         Console.WriteLine("[{0}] [PlayerBotDirector] Global cap reached! No new bots will be spawned.", GetTimestamp());
                     return; // nothing to do, shard is at capacity
                 }
@@ -436,7 +422,7 @@ namespace Server.Engines
                     totalSpawned += spawned;
                 }
 
-                if (DEBUG_ENABLED)
+                if (Config.EnableLogging)
                 {
                     if (totalSpawned > 0)
                         Console.WriteLine("[{0}] [PlayerBotDirector] === Population Tick Complete: {1} new bots spawned ===", GetTimestamp(), totalSpawned);
@@ -456,16 +442,16 @@ namespace Server.Engines
             List<PlayerBot> botsInRegion = GetBotsInRegion(profile);
             int count = botsInRegion.Count;
 
-            if (DEBUG_ENABLED)
+            if (Config.EnableLogging && Config.VerboseSpawning)
                 Console.WriteLine("[{0}] [PlayerBotDirector] Region '{1}': {2}/{3} bots present (target: {4}-{5})", 
                     GetTimestamp(), profile.Name, count, profile.Max, profile.Min, profile.Max);
 
             if (count >= profile.Min)
             {
-                if (DEBUG_ENABLED && count < profile.Max)
+                if (Config.EnableLogging && Config.VerboseSpawning && count < profile.Max)
                     Console.WriteLine("[{0}] [PlayerBotDirector] Region '{1}': Population satisfied (could spawn {2} more)", 
                         GetTimestamp(), profile.Name, profile.Max - count);
-                else if (DEBUG_ENABLED)
+                else if (Config.EnableLogging && Config.VerboseSpawning)
                     Console.WriteLine("[{0}] [PlayerBotDirector] Region '{1}': At maximum capacity", GetTimestamp(), profile.Name);
                 return 0; // already satisfied
             }
@@ -474,16 +460,16 @@ namespace Server.Engines
 
             // Respect global cap
             int totalRegistered = GetRegisteredBotCount();
-            int globalRemaining = GLOBAL_CAP - totalRegistered;
+            int globalRemaining = Config.GlobalCap - totalRegistered;
             if (toSpawn > globalRemaining)
             {
-                if (DEBUG_ENABLED)
+                if (Config.EnableLogging && Config.VerboseSpawning)
                     Console.WriteLine("[{0}] [PlayerBotDirector] Region '{1}': Wanted to spawn {2} bots, but global cap limits to {3}", 
                         GetTimestamp(), profile.Name, toSpawn, globalRemaining);
                 toSpawn = globalRemaining;
             }
 
-            if (DEBUG_ENABLED)
+            if (Config.EnableLogging && Config.VerboseSpawning)
                 Console.WriteLine("[{0}] [PlayerBotDirector] Region '{1}': Attempting to spawn {2} bots...", GetTimestamp(), profile.Name, toSpawn);
 
             int actuallySpawned = 0;
@@ -493,7 +479,7 @@ namespace Server.Engines
                     actuallySpawned++;
             }
 
-            if (DEBUG_ENABLED)
+            if (Config.EnableLogging && Config.VerboseSpawning)
             {
                 if (actuallySpawned == toSpawn)
                     Console.WriteLine("[{0}] [PlayerBotDirector] Region '{1}': Successfully spawned {2} bots", GetTimestamp(), profile.Name, actuallySpawned);
@@ -512,8 +498,8 @@ namespace Server.Engines
             Point3D loc = FindSpawnLocation(profile);
             if (loc == Point3D.Zero)
             {
-                if (DEBUG_ENABLED)
-                    Console.WriteLine("[{0}] [PlayerBotDirector] Failed to find spawn location in region '{1}' after {2} attempts", GetTimestamp(), profile.Name, SPAWN_LOCATION_ATTEMPTS);
+                if (Config.EnableLogging && Config.VerboseSpawning)
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Failed to find spawn location in region '{1}' after {2} attempts", GetTimestamp(), profile.Name, Config.SpawnLocationAttempts);
                 return false; // failed to find safe spot
             }
 
@@ -523,7 +509,7 @@ namespace Server.Engines
             // Register the bot with the director
             RegisterBot(bot);
 
-            if (DEBUG_ENABLED)
+            if (Config.EnableLogging && Config.VerboseSpawning)
             {
                 string persona = "Unknown";
                 if (bot.PlayerBotProfile != null)
@@ -543,7 +529,7 @@ namespace Server.Engines
         private Point3D FindSpawnLocation(RegionProfile profile)
         {
             Map map = profile.Map;
-            for (int i = 0; i < SPAWN_LOCATION_ATTEMPTS; i++) // try up to configured attempts
+            for (int i = 0; i < Config.SpawnLocationAttempts; i++) // try up to configured attempts
             {
                 int x = Utility.RandomMinMax(profile.Area.Start.X, profile.Area.End.X);
                 int y = Utility.RandomMinMax(profile.Area.Start.Y, profile.Area.End.Y);
@@ -552,9 +538,9 @@ namespace Server.Engines
 
                 if (CanSpawnAt(map, p))
                 {
-                    if (DEBUG_ENABLED)
+                    if (Config.EnableLogging && Config.VerboseSpawning)
                         Console.WriteLine("[{0}] [PlayerBotDirector] Found spawn location {1} in region '{2}' (attempt {3}/{4})", 
-                            GetTimestamp(), p, profile.Name, i + 1, SPAWN_LOCATION_ATTEMPTS);
+                            GetTimestamp(), p, profile.Name, i + 1, Config.SpawnLocationAttempts);
                     return p;
                 }
             }
@@ -581,19 +567,19 @@ namespace Server.Engines
         {
             try
             {
-                if (DEBUG_ENABLED)
+                if (Config.EnableLogging && Config.VerboseBehaviors)
                     Console.WriteLine("[{0}] [PlayerBotDirector] === Behavior Tick Started ===", GetTimestamp());
 
                 List<PlayerBot> allBots = GetAllRegisteredBots();
                 
                 if (allBots.Count == 0)
                 {
-                    if (DEBUG_ENABLED)
+                    if (Config.EnableLogging && Config.VerboseBehaviors)
                         Console.WriteLine("[{0}] [PlayerBotDirector] No bots registered for behavior management", GetTimestamp());
                     return;
                 }
 
-                if (DEBUG_ENABLED)
+                if (Config.EnableLogging && Config.VerboseBehaviors)
                     Console.WriteLine("[{0}] [PlayerBotDirector] Managing behaviors for {1} bots", GetTimestamp(), allBots.Count);
 
                 // Phase 2 sophisticated behaviors
@@ -602,7 +588,7 @@ namespace Server.Engines
                 ProcessBotInteractions(allBots);
                 ProcessDynamicEvents(allBots);
 
-                if (DEBUG_ENABLED)
+                if (Config.EnableLogging && Config.VerboseBehaviors)
                     Console.WriteLine("[{0}] [PlayerBotDirector] === Behavior Tick Complete ===", GetTimestamp());
             }
             catch (Exception ex)
@@ -652,7 +638,7 @@ namespace Server.Engines
                         DateTime.Now - botInfo.LastStateChange > TimeSpan.FromMinutes(10))
                     {
                         UpdateBotInfo(bot, BotBehaviorState.Idle, Point3D.Zero);
-                        if (DEBUG_ENABLED)
+                        if (Config.EnableLogging && Config.VerboseTravel)
                             Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' completed travel to {2}", 
                                 GetTimestamp(), bot.Name, botInfo.Destination);
                     }
@@ -660,20 +646,20 @@ namespace Server.Engines
                 }
 
                 // Random chance for inter-region travel (long distance)
-                if (Utility.Random(100) < INTER_REGION_TRAVEL_CHANCE)
+                if (Utility.Random(100) < Config.InterRegionTravelChance)
                 {
                     if (InitiateInterRegionTravel(bot))
                         interRegionTravelers++;
                 }
                 // Random chance for local travel
-                else if (Utility.Random(100) < TRAVEL_CHANCE_PERCENT)
+                else if (Utility.Random(100) < Config.TravelChancePercent)
                 {
                     if (InitiateLocalTravel(bot))
                         localTravelers++;
                 }
             }
 
-            if (DEBUG_ENABLED && (localTravelers > 0 || interRegionTravelers > 0))
+            if (Config.EnableLogging && Config.VerboseTravel && (localTravelers > 0 || interRegionTravelers > 0))
                 Console.WriteLine("[{0}] [PlayerBotDirector] Initiated travel: {1} local, {2} inter-region", 
                     GetTimestamp(), localTravelers, interRegionTravelers);
         }
@@ -726,7 +712,7 @@ namespace Server.Engines
 
             UpdateBotInfo(bot, BotBehaviorState.Traveling, destination);
 
-            if (DEBUG_ENABLED)
+            if (Config.EnableLogging && Config.VerboseTravel)
                 Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' beginning inter-region travel from {2} to {3} ({4})", 
                     GetTimestamp(), bot.Name, GetBotCurrentRegionName(bot), destinationName, destination);
 
@@ -779,7 +765,7 @@ namespace Server.Engines
 
             UpdateBotInfo(bot, BotBehaviorState.Traveling, destination);
 
-            if (DEBUG_ENABLED)
+            if (Config.EnableLogging && Config.VerboseTravel)
                 Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' traveling locally to {2} ({3})", 
                     GetTimestamp(), bot.Name, destinationName, destination);
 
@@ -819,7 +805,7 @@ namespace Server.Engines
                 }
             }
 
-            if (DEBUG_ENABLED && (shoppingBots > 0 || socializing > 0))
+            if (Config.EnableLogging && Config.VerboseBehaviors && (shoppingBots > 0 || socializing > 0))
                 Console.WriteLine("[{0}] [PlayerBotDirector] Location behaviors: {1} shopping, {2} socializing", 
                     GetTimestamp(), shoppingBots, socializing);
         }
@@ -837,7 +823,7 @@ namespace Server.Engines
             switch (poi.Type)
             {
                 case POIType.Shop:
-                    if (Utility.Random(100) < SHOP_VISIT_CHANCE)
+                    if (Utility.Random(100) < Config.ShopVisitChance)
                     {
                         PerformShoppingBehavior(bot, poi);
                         return true;
@@ -898,7 +884,7 @@ namespace Server.Engines
                 bot.LastSpeechTime = DateTime.Now;
             }
 
-            if (DEBUG_ENABLED)
+            if (Config.EnableLogging && Config.VerboseBehaviors)
                 Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' shopping at {2}", 
                     GetTimestamp(), bot.Name, poi.Name);
         }
@@ -922,7 +908,7 @@ namespace Server.Engines
             bot.SayWithHue(message);
             bot.LastSpeechTime = DateTime.Now;
 
-            if (DEBUG_ENABLED)
+            if (Config.EnableLogging && Config.VerboseBehaviors)
                 Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' socializing at {2}", 
                     GetTimestamp(), bot.Name, poi.Name);
         }
@@ -945,7 +931,7 @@ namespace Server.Engines
             bot.SayWithHue(message);
             bot.LastSpeechTime = DateTime.Now;
 
-            if (DEBUG_ENABLED)
+            if (Config.EnableLogging && Config.VerboseBehaviors)
                 Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' banking at {2}", 
                     GetTimestamp(), bot.Name, poi.Name);
         }
@@ -969,7 +955,7 @@ namespace Server.Engines
             bot.SayWithHue(message);
             bot.LastSpeechTime = DateTime.Now;
 
-            if (DEBUG_ENABLED)
+            if (Config.EnableLogging && Config.VerboseBehaviors)
                 Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' exploring at {2}", 
                     GetTimestamp(), bot.Name, poi.Name);
         }
@@ -977,7 +963,7 @@ namespace Server.Engines
         private void ProcessDynamicEvents(List<PlayerBot> allBots)
         {
             // Random chance for dynamic events
-            if (Utility.Random(100) < DYNAMIC_EVENT_CHANCE)
+            if (Utility.Random(100) < Config.DynamicEventChance)
             {
                 if (allBots.Count >= 4) // Need minimum bots for events
                 {
@@ -1035,7 +1021,7 @@ namespace Server.Engines
                         }
                     }));
 
-                    if (DEBUG_ENABLED)
+                    if (Config.EnableLogging && Config.VerboseEvents)
                         Console.WriteLine("[{0}] [PlayerBotDirector] Dynamic event: Bot conflict between '{1}' and '{2}'", 
                             GetTimestamp(), pk.Name, target.Name);
                 }
@@ -1077,7 +1063,7 @@ namespace Server.Engines
                         }
                     }));
 
-                    if (DEBUG_ENABLED)
+                    if (Config.EnableLogging && Config.VerboseEvents)
                         Console.WriteLine("[{0}] [PlayerBotDirector] Dynamic event: Trading between '{1}' and '{2}'", 
                             GetTimestamp(), crafter.Name, customer.Name);
                 }
@@ -1121,7 +1107,7 @@ namespace Server.Engines
                     leader.SayWithHue(message);
                     leader.LastSpeechTime = DateTime.Now;
 
-                    if (DEBUG_ENABLED)
+                    if (Config.EnableLogging && Config.VerboseEvents)
                         Console.WriteLine("[{0}] [PlayerBotDirector] Dynamic event: Group activity initiated by '{1}' with {2} nearby bots", 
                             GetTimestamp(), leader.Name, group.Count - 1);
                     
@@ -1142,7 +1128,7 @@ namespace Server.Engines
                 return false;
 
             // Generate a random travel destination
-            int distance = Utility.RandomMinMax(MIN_TRAVEL_DISTANCE, MAX_TRAVEL_DISTANCE);
+            int distance = Utility.RandomMinMax(Config.MinTravelDistance, Config.MaxTravelDistance);
             int angle = Utility.Random(360);
             
             double radians = angle * Math.PI / 180.0;
@@ -1158,7 +1144,7 @@ namespace Server.Engines
             // Validate the destination
             if (!CanSpawnAt(map, destination))
             {
-                if (DEBUG_ENABLED)
+                if (Config.EnableLogging && Config.VerboseTravel)
                     Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' travel destination {2} is invalid", 
                         GetTimestamp(), bot.Name, destination);
                 return false;
@@ -1171,7 +1157,7 @@ namespace Server.Engines
             {
                 bot.AIObject.Action = ActionType.Wander;
                 
-                if (DEBUG_ENABLED)
+                if (Config.EnableLogging && Config.VerboseTravel)
                     Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' beginning random travel from {2} towards {3} (distance: {4})", 
                         GetTimestamp(), bot.Name, currentLoc, destination, distance);
                 
@@ -1252,7 +1238,7 @@ namespace Server.Engines
                 }
             }
 
-            if (DEBUG_ENABLED && interactions > 0)
+            if (Config.EnableLogging && Config.VerboseInteractions && interactions > 0)
                 Console.WriteLine("[{0}] [PlayerBotDirector] Processed {1} bot interactions", GetTimestamp(), interactions);
         }
 
@@ -1263,7 +1249,7 @@ namespace Server.Engines
             foreach (PlayerBot bot in group)
             {
                 // Random chance for this bot to initiate interaction
-                if (Utility.Random(100) < INTERACTION_CHANCE_PERCENT)
+                if (Utility.Random(100) < Config.InteractionChancePercent)
                 {
                     // Find nearby bots within interaction range
                     List<PlayerBot> nearbyBots = new List<PlayerBot>();
@@ -1313,7 +1299,7 @@ namespace Server.Engines
                 initiator.Direction = initiator.GetDirectionTo(target);
                 target.Direction = target.GetDirectionTo(initiator);
                 
-                if (DEBUG_ENABLED)
+                if (Config.EnableLogging && Config.VerboseInteractions)
                     Console.WriteLine("[{0}] [PlayerBotDirector] Bot interaction: '{1}' -> '{2}': \"{3}\"", 
                         GetTimestamp(), initiator.Name, target.Name, message);
                 
@@ -1411,7 +1397,7 @@ namespace Server.Engines
             responder.SayWithHue(response);
             responder.LastSpeechTime = DateTime.Now;
             
-            if (DEBUG_ENABLED)
+            if (Config.EnableLogging && Config.VerboseInteractions)
                 Console.WriteLine("[{0}] [PlayerBotDirector] Bot response: '{1}' -> '{2}': \"{3}\"", 
                     GetTimestamp(), responder.Name, initiator.Name, response);
         }
