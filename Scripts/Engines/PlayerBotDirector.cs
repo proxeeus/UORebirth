@@ -12,6 +12,103 @@ namespace Server.Engines
     /// </summary>
     public class PlayerBotDirector
     {
+        #region Nested Types
+        /// <summary>
+        /// Bot behavior states for tracking what bots are currently doing
+        /// </summary>
+        public enum BotBehaviorState
+        {
+            Idle,
+            Traveling,
+            Shopping,
+            Socializing,
+            Banking,
+            Exploring,
+            Fighting
+        }
+
+        /// <summary>
+        /// Types of points of interest for bot behavior
+        /// </summary>
+        public enum POIType
+        {
+            Bank,
+            Shop,
+            Tavern,
+            Healer,
+            Dungeon,
+            Landmark,
+            Waypoint
+        }
+
+        /// <summary>
+        /// Information about a registered PlayerBot for lifecycle tracking
+        /// </summary>
+        private class PlayerBotInfo
+        {
+            public PlayerBot Bot { get; private set; }
+            public DateTime SpawnTime { get; private set; }
+            public BotBehaviorState CurrentState { get; set; }
+            public Point3D Destination { get; set; }
+            public DateTime LastStateChange { get; set; }
+
+            public PlayerBotInfo(PlayerBot bot)
+            {
+                Bot = bot;
+                SpawnTime = DateTime.Now;
+                CurrentState = BotBehaviorState.Idle;
+                Destination = Point3D.Zero;
+                LastStateChange = DateTime.Now;
+            }
+        }
+
+        /// <summary>
+        /// Points of interest for bot navigation and behavior
+        /// </summary>
+        private class PointOfInterest
+        {
+            public string Name { get; private set; }
+            public Map Map { get; private set; }
+            public Point3D Location { get; private set; }
+            public POIType Type { get; private set; }
+
+            public PointOfInterest(string name, Map map, Point3D location, POIType type)
+            {
+                Name = name;
+                Map = map;
+                Location = location;
+                Type = type;
+            }
+        }
+
+        /// <summary>
+        /// Region profile for population management
+        /// </summary>
+        private class RegionProfile
+        {
+            private string _name;
+            private Map _map;
+            private Rectangle2D _area;
+            private int _min;
+            private int _max;
+
+            public string Name { get { return _name; } }
+            public Map Map { get { return _map; } }
+            public Rectangle2D Area { get { return _area; } }
+            public int Min { get { return _min; } }
+            public int Max { get { return _max; } }
+
+            public RegionProfile(string name, Map map, Rectangle2D area, int min, int max)
+            {
+                _name = name;
+                _map = map;
+                _area = area;
+                _min = min;
+                _max = max;
+            }
+        }
+        #endregion
+
         #region Singleton
         private static readonly PlayerBotDirector m_Instance = new PlayerBotDirector();
         public static PlayerBotDirector Instance { get { return m_Instance; } }
@@ -29,6 +126,9 @@ namespace Server.Engines
         private const int INTERACTION_CHANCE_PERCENT = 25; // Chance per behavior tick that bots will interact
         private const int MIN_TRAVEL_DISTANCE = 10;     // Minimum tiles to travel
         private const int MAX_TRAVEL_DISTANCE = 50;     // Maximum tiles to travel
+        private const int INTER_REGION_TRAVEL_CHANCE = 5; // Chance for long-distance travel between regions
+        private const int SHOP_VISIT_CHANCE = 10;       // Chance to visit shops in cities
+        private const int DYNAMIC_EVENT_CHANCE = 3;     // Chance for dynamic events per behavior tick
         
         // Debug toggle - set to false to disable verbose logging
         private static bool DEBUG_ENABLED = true;
@@ -38,6 +138,7 @@ namespace Server.Engines
         private Timer m_Timer;
         private Timer m_BehaviorTimer; // Phase 2: Behavior management timer
         private List<RegionProfile> m_Regions;
+        private List<PointOfInterest> m_PointsOfInterest; // Phase 2: Notable locations
         
         // Bot registry for efficient tracking
         private Dictionary<Serial, PlayerBotInfo> m_RegisteredBots;
@@ -54,7 +155,10 @@ namespace Server.Engines
         {
             m_Regions = new List<RegionProfile>();
             m_RegisteredBots = new Dictionary<Serial, PlayerBotInfo>();
+            m_PointsOfInterest = new List<PointOfInterest>();
+            
             SeedDefaultRegions();
+            SeedPointsOfInterest();
 
             // Phase 1: Population management timer
             m_Timer = Timer.DelayCall(TimeSpan.FromSeconds(STARTUP_DELAY_SECONDS), TimeSpan.FromSeconds(POPULATION_TICK_SECONDS), new TimerCallback(OnPopulationTick));
@@ -154,6 +258,36 @@ namespace Server.Engines
         }
 
         /// <summary>
+        /// Get bot info for a specific bot (thread-safe)
+        /// </summary>
+        private PlayerBotInfo GetBotInfo(PlayerBot bot)
+        {
+            lock (m_RegistryLock)
+            {
+                if (m_RegisteredBots.ContainsKey(bot.Serial))
+                    return m_RegisteredBots[bot.Serial];
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Update bot info (thread-safe)
+        /// </summary>
+        private void UpdateBotInfo(PlayerBot bot, BotBehaviorState newState, Point3D destination)
+        {
+            lock (m_RegistryLock)
+            {
+                if (m_RegisteredBots.ContainsKey(bot.Serial))
+                {
+                    PlayerBotInfo info = m_RegisteredBots[bot.Serial];
+                    info.CurrentState = newState;
+                    info.Destination = destination;
+                    info.LastStateChange = DateTime.Now;
+                }
+            }
+        }
+
+        /// <summary>
         /// Clean up any stale bot registrations (bots that were deleted without proper unregistration)
         /// </summary>
         private void CleanupStaleRegistrations()
@@ -229,6 +363,45 @@ namespace Server.Engines
                         GetTimestamp(), profile.Name, profile.Map, 
                         profile.Area.Width, profile.Area.Height, 
                         profile.Min, profile.Max);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Seed points of interest for bot behavior and travel destinations
+        /// </summary>
+        private void SeedPointsOfInterest()
+        {
+            if (DEBUG_ENABLED)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Seeding points of interest...", GetTimestamp());
+
+            // Britain POIs
+            m_PointsOfInterest.Add(new PointOfInterest("Britain Bank", Map.Felucca, new Point3D(1434, 1699, 0), POIType.Bank));
+            m_PointsOfInterest.Add(new PointOfInterest("Britain Blacksmith", Map.Felucca, new Point3D(1420, 1634, 0), POIType.Shop));
+            m_PointsOfInterest.Add(new PointOfInterest("Britain Tavern", Map.Felucca, new Point3D(1462, 1607, 0), POIType.Tavern));
+            m_PointsOfInterest.Add(new PointOfInterest("Britain Healer", Map.Felucca, new Point3D(1482, 1612, 0), POIType.Healer));
+            m_PointsOfInterest.Add(new PointOfInterest("Britain Mage Shop", Map.Felucca, new Point3D(1492, 1629, 0), POIType.Shop));
+
+            // Yew POIs
+            m_PointsOfInterest.Add(new PointOfInterest("Yew Bank", Map.Felucca, new Point3D(771, 752, 0), POIType.Bank));
+            m_PointsOfInterest.Add(new PointOfInterest("Yew Winery", Map.Felucca, new Point3D(692, 858, 0), POIType.Tavern));
+            m_PointsOfInterest.Add(new PointOfInterest("Yew Abbey", Map.Felucca, new Point3D(654, 858, 0), POIType.Landmark));
+
+            // Despise POIs
+            m_PointsOfInterest.Add(new PointOfInterest("Despise Entrance", Map.Felucca, new Point3D(514, 1560, 0), POIType.Dungeon));
+            m_PointsOfInterest.Add(new PointOfInterest("Despise Level 1", Map.Felucca, new Point3D(553, 1459, 0), POIType.Dungeon));
+
+            // Travel waypoints between regions
+            m_PointsOfInterest.Add(new PointOfInterest("Britain-Yew Road", Map.Felucca, new Point3D(1200, 1000, 0), POIType.Waypoint));
+            m_PointsOfInterest.Add(new PointOfInterest("Yew-Despise Path", Map.Felucca, new Point3D(600, 1200, 0), POIType.Waypoint));
+
+            if (DEBUG_ENABLED)
+            {
+                Console.WriteLine("[{0}] [PlayerBotDirector] Seeded {1} points of interest:", GetTimestamp(), m_PointsOfInterest.Count);
+                foreach (PointOfInterest poi in m_PointsOfInterest)
+                {
+                    Console.WriteLine("[{0}]   - {1} ({2}) at {3}", 
+                        GetTimestamp(), poi.Name, poi.Type, poi.Location);
                 }
             }
         }
@@ -401,46 +574,7 @@ namespace Server.Engines
         }
         #endregion
 
-        #region Nested types
-        /// <summary>
-        /// Information about a registered PlayerBot for lifecycle tracking
-        /// </summary>
-        private class PlayerBotInfo
-        {
-            public PlayerBot Bot { get; private set; }
-            public DateTime SpawnTime { get; private set; }
 
-            public PlayerBotInfo(PlayerBot bot)
-            {
-                Bot = bot;
-                SpawnTime = DateTime.Now;
-            }
-        }
-
-        private class RegionProfile
-        {
-            private string _name;
-            private Map _map;
-            private Rectangle2D _area;
-            private int _min;
-            private int _max;
-
-            public string Name { get { return _name; } }
-            public Map Map { get { return _map; } }
-            public Rectangle2D Area { get { return _area; } }
-            public int Min { get { return _min; } }
-            public int Max { get { return _max; } }
-
-            public RegionProfile(string name, Map map, Rectangle2D area, int min, int max)
-            {
-                _name = name;
-                _map = map;
-                _area = area;
-                _min = min;
-                _max = max;
-            }
-        }
-        #endregion
 
         #region Phase 2: Behavior Management
         private void OnBehaviorTick()
@@ -462,9 +596,11 @@ namespace Server.Engines
                 if (DEBUG_ENABLED)
                     Console.WriteLine("[{0}] [PlayerBotDirector] Managing behaviors for {1} bots", GetTimestamp(), allBots.Count);
 
-                // Phase 2 behaviors
+                // Phase 2 sophisticated behaviors
                 ProcessBotTravel(allBots);
+                ProcessLocationSpecificBehaviors(allBots);
                 ProcessBotInteractions(allBots);
+                ProcessDynamicEvents(allBots);
 
                 if (DEBUG_ENABLED)
                     Console.WriteLine("[{0}] [PlayerBotDirector] === Behavior Tick Complete ===", GetTimestamp());
@@ -495,7 +631,8 @@ namespace Server.Engines
 
         private void ProcessBotTravel(List<PlayerBot> allBots)
         {
-            int travelingBots = 0;
+            int localTravelers = 0;
+            int interRegionTravelers = 0;
             
             foreach (PlayerBot bot in allBots)
             {
@@ -503,21 +640,501 @@ namespace Server.Engines
                 if (bot.Combatant != null || bot.Controled)
                     continue;
 
-                // Random chance to travel
-                if (Utility.Random(100) < TRAVEL_CHANCE_PERCENT)
+                PlayerBotInfo botInfo = GetBotInfo(bot);
+                if (botInfo == null)
+                    continue;
+
+                // Check if bot is currently traveling
+                if (botInfo.CurrentState == BotBehaviorState.Traveling)
                 {
-                    if (InitiateBotTravel(bot))
-                        travelingBots++;
+                    // Check if bot has reached destination or been traveling too long
+                    if (bot.InRange(botInfo.Destination, 5) || 
+                        DateTime.Now - botInfo.LastStateChange > TimeSpan.FromMinutes(10))
+                    {
+                        UpdateBotInfo(bot, BotBehaviorState.Idle, Point3D.Zero);
+                        if (DEBUG_ENABLED)
+                            Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' completed travel to {2}", 
+                                GetTimestamp(), bot.Name, botInfo.Destination);
+                    }
+                    continue; // Skip other travel decisions while traveling
+                }
+
+                // Random chance for inter-region travel (long distance)
+                if (Utility.Random(100) < INTER_REGION_TRAVEL_CHANCE)
+                {
+                    if (InitiateInterRegionTravel(bot))
+                        interRegionTravelers++;
+                }
+                // Random chance for local travel
+                else if (Utility.Random(100) < TRAVEL_CHANCE_PERCENT)
+                {
+                    if (InitiateLocalTravel(bot))
+                        localTravelers++;
                 }
             }
 
-            if (DEBUG_ENABLED && travelingBots > 0)
-                Console.WriteLine("[{0}] [PlayerBotDirector] Initiated travel for {1} bots", GetTimestamp(), travelingBots);
+            if (DEBUG_ENABLED && (localTravelers > 0 || interRegionTravelers > 0))
+                Console.WriteLine("[{0}] [PlayerBotDirector] Initiated travel: {1} local, {2} inter-region", 
+                    GetTimestamp(), localTravelers, interRegionTravelers);
         }
 
+        private bool InitiateInterRegionTravel(PlayerBot bot)
+        {
+            // Find a random region different from current location
+            RegionProfile targetRegion = null;
+            RegionProfile currentRegion = GetBotCurrentRegion(bot);
+            
+            List<RegionProfile> otherRegions = new List<RegionProfile>();
+            foreach (RegionProfile region in m_Regions)
+            {
+                if (region != currentRegion)
+                    otherRegions.Add(region);
+            }
+
+            if (otherRegions.Count == 0)
+                return false;
+
+            targetRegion = otherRegions[Utility.Random(otherRegions.Count)];
+
+            // Find a point of interest in the target region
+            List<PointOfInterest> targetPOIs = new List<PointOfInterest>();
+            foreach (PointOfInterest poi in m_PointsOfInterest)
+            {
+                if (poi.Map == targetRegion.Map && targetRegion.Area.Contains(poi.Location))
+                    targetPOIs.Add(poi);
+            }
+
+            Point3D destination;
+            string destinationName;
+            
+            if (targetPOIs.Count > 0)
+            {
+                PointOfInterest targetPOI = targetPOIs[Utility.Random(targetPOIs.Count)];
+                destination = targetPOI.Location;
+                destinationName = targetPOI.Name;
+            }
+            else
+            {
+                // Fallback to random point in target region
+                destination = new Point3D(
+                    Utility.RandomMinMax(targetRegion.Area.Start.X, targetRegion.Area.End.X),
+                    Utility.RandomMinMax(targetRegion.Area.Start.Y, targetRegion.Area.End.Y),
+                    0
+                );
+                destinationName = targetRegion.Name;
+            }
+
+            UpdateBotInfo(bot, BotBehaviorState.Traveling, destination);
+
+            if (DEBUG_ENABLED)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' beginning inter-region travel from {2} to {3} ({4})", 
+                    GetTimestamp(), bot.Name, GetBotCurrentRegionName(bot), destinationName, destination);
+
+            // Set AI to wander towards destination
+            if (bot.AIObject != null)
+                bot.AIObject.Action = ActionType.Wander;
+
+            return true;
+        }
+
+        private bool InitiateLocalTravel(PlayerBot bot)
+        {
+            // Choose a local point of interest or random nearby location
+            Point3D currentLoc = bot.Location;
+            Map map = bot.Map;
+            
+            if (map == null)
+                return false;
+
+            Point3D destination;
+            string destinationName = "nearby area";
+
+            // 60% chance to visit a nearby POI, 40% chance for random travel
+            if (Utility.Random(100) < 60)
+            {
+                List<PointOfInterest> nearbyPOIs = new List<PointOfInterest>();
+                foreach (PointOfInterest poi in m_PointsOfInterest)
+                {
+                    if (poi.Map == map && bot.GetDistanceToSqrt(poi.Location) < 100)
+                        nearbyPOIs.Add(poi);
+                }
+
+                if (nearbyPOIs.Count > 0)
+                {
+                    PointOfInterest targetPOI = nearbyPOIs[Utility.Random(nearbyPOIs.Count)];
+                    destination = targetPOI.Location;
+                    destinationName = targetPOI.Name;
+                }
+                else
+                {
+                    // Fallback to random travel
+                    return InitiateBotTravel(bot);
+                }
+            }
+            else
+            {
+                // Random local travel
+                return InitiateBotTravel(bot);
+            }
+
+            UpdateBotInfo(bot, BotBehaviorState.Traveling, destination);
+
+            if (DEBUG_ENABLED)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' traveling locally to {2} ({3})", 
+                    GetTimestamp(), bot.Name, destinationName, destination);
+
+            // Set AI to wander towards destination
+            if (bot.AIObject != null)
+                bot.AIObject.Action = ActionType.Wander;
+
+            return true;
+        }
+
+        private void ProcessLocationSpecificBehaviors(List<PlayerBot> allBots)
+        {
+            int shoppingBots = 0;
+            int socializing = 0;
+            
+            foreach (PlayerBot bot in allBots)
+            {
+                if (bot.Combatant != null || bot.Controled)
+                    continue;
+
+                PlayerBotInfo botInfo = GetBotInfo(bot);
+                if (botInfo == null || botInfo.CurrentState == BotBehaviorState.Traveling)
+                    continue;
+
+                // Find nearby POIs
+                PointOfInterest nearestPOI = GetNearestPOI(bot);
+                if (nearestPOI != null && bot.GetDistanceToSqrt(nearestPOI.Location) < 10)
+                {
+                    // Bot is near a POI, engage in location-specific behavior
+                    if (ProcessLocationBehavior(bot, nearestPOI))
+                    {
+                        if (nearestPOI.Type == POIType.Shop)
+                            shoppingBots++;
+                        else if (nearestPOI.Type == POIType.Tavern || nearestPOI.Type == POIType.Bank)
+                            socializing++;
+                    }
+                }
+            }
+
+            if (DEBUG_ENABLED && (shoppingBots > 0 || socializing > 0))
+                Console.WriteLine("[{0}] [PlayerBotDirector] Location behaviors: {1} shopping, {2} socializing", 
+                    GetTimestamp(), shoppingBots, socializing);
+        }
+
+        private bool ProcessLocationBehavior(PlayerBot bot, PointOfInterest poi)
+        {
+            PlayerBotInfo botInfo = GetBotInfo(bot);
+            if (botInfo == null)
+                return false;
+
+            // Check if bot just performed this behavior
+            if (DateTime.Now - botInfo.LastStateChange < TimeSpan.FromMinutes(5))
+                return false;
+
+            switch (poi.Type)
+            {
+                case POIType.Shop:
+                    if (Utility.Random(100) < SHOP_VISIT_CHANCE)
+                    {
+                        PerformShoppingBehavior(bot, poi);
+                        return true;
+                    }
+                    break;
+
+                case POIType.Tavern:
+                    if (Utility.Random(100) < 20)
+                    {
+                        PerformTavernBehavior(bot, poi);
+                        return true;
+                    }
+                    break;
+
+                case POIType.Bank:
+                    if (Utility.Random(100) < 15)
+                    {
+                        PerformBankBehavior(bot, poi);
+                        return true;
+                    }
+                    break;
+
+                case POIType.Dungeon:
+                    if (bot.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.Adventurer && Utility.Random(100) < 25)
+                    {
+                        PerformDungeonBehavior(bot, poi);
+                        return true;
+                    }
+                    break;
+            }
+
+            return false;
+        }
+
+        private void PerformShoppingBehavior(PlayerBot bot, PointOfInterest poi)
+        {
+            UpdateBotInfo(bot, BotBehaviorState.Shopping, poi.Location);
+            
+            List<string> shopMessages = new List<string>();
+            
+            if (bot.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.Crafter)
+            {
+                shopMessages.Add("I need some quality materials.");
+                shopMessages.Add("These tools look well-crafted.");
+                shopMessages.Add("The prices seem fair today.");
+            }
+            else
+            {
+                shopMessages.Add("I should stock up on supplies.");
+                shopMessages.Add("This shop has good wares.");
+                shopMessages.Add("Time to resupply.");
+            }
+
+            if (shopMessages.Count > 0)
+            {
+                string message = shopMessages[Utility.Random(shopMessages.Count)];
+                bot.SayWithHue(message);
+                bot.LastSpeechTime = DateTime.Now;
+            }
+
+            if (DEBUG_ENABLED)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' shopping at {2}", 
+                    GetTimestamp(), bot.Name, poi.Name);
+        }
+
+        private void PerformTavernBehavior(PlayerBot bot, PointOfInterest poi)
+        {
+            UpdateBotInfo(bot, BotBehaviorState.Socializing, poi.Location);
+            
+            List<string> tavernMessages = new List<string>();
+            tavernMessages.Add("A drink sounds good right about now.");
+            tavernMessages.Add("I hear interesting tales in places like this.");
+            tavernMessages.Add("The atmosphere here is quite welcoming.");
+            
+            if (bot.PlayerBotExperience == PlayerBotPersona.PlayerBotExperience.Grandmaster)
+            {
+                tavernMessages.Add("I've seen many adventures begin in taverns like this.");
+                tavernMessages.Add("The stories these walls could tell...");
+            }
+
+            string message = tavernMessages[Utility.Random(tavernMessages.Count)];
+            bot.SayWithHue(message);
+            bot.LastSpeechTime = DateTime.Now;
+
+            if (DEBUG_ENABLED)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' socializing at {2}", 
+                    GetTimestamp(), bot.Name, poi.Name);
+        }
+
+        private void PerformBankBehavior(PlayerBot bot, PointOfInterest poi)
+        {
+            UpdateBotInfo(bot, BotBehaviorState.Banking, poi.Location);
+            
+            List<string> bankMessages = new List<string>();
+            bankMessages.Add("I should secure my valuables.");
+            bankMessages.Add("The bank vaults are quite secure here.");
+            
+            if (bot.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.Crafter)
+            {
+                bankMessages.Add("Time to deposit my earnings.");
+                bankMessages.Add("I need to organize my materials.");
+            }
+
+            string message = bankMessages[Utility.Random(bankMessages.Count)];
+            bot.SayWithHue(message);
+            bot.LastSpeechTime = DateTime.Now;
+
+            if (DEBUG_ENABLED)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' banking at {2}", 
+                    GetTimestamp(), bot.Name, poi.Name);
+        }
+
+        private void PerformDungeonBehavior(PlayerBot bot, PointOfInterest poi)
+        {
+            UpdateBotInfo(bot, BotBehaviorState.Exploring, poi.Location);
+            
+            List<string> dungeonMessages = new List<string>();
+            dungeonMessages.Add("Adventure awaits in the depths below.");
+            dungeonMessages.Add("I can sense danger ahead.");
+            dungeonMessages.Add("Fortune favors the bold.");
+            
+            if (bot.PlayerBotExperience == PlayerBotPersona.PlayerBotExperience.Newbie)
+            {
+                dungeonMessages.Add("This place looks quite dangerous...");
+                dungeonMessages.Add("Perhaps I should find some companions.");
+            }
+
+            string message = dungeonMessages[Utility.Random(dungeonMessages.Count)];
+            bot.SayWithHue(message);
+            bot.LastSpeechTime = DateTime.Now;
+
+            if (DEBUG_ENABLED)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' exploring at {2}", 
+                    GetTimestamp(), bot.Name, poi.Name);
+        }
+
+        private void ProcessDynamicEvents(List<PlayerBot> allBots)
+        {
+            // Random chance for dynamic events
+            if (Utility.Random(100) < DYNAMIC_EVENT_CHANCE)
+            {
+                if (allBots.Count >= 4) // Need minimum bots for events
+                {
+                    int eventType = Utility.Random(3);
+                    switch (eventType)
+                    {
+                        case 0:
+                            CreateBotConflict(allBots);
+                            break;
+                        case 1:
+                            CreateTradingEvent(allBots);
+                            break;
+                        case 2:
+                            CreateGroupActivity(allBots);
+                            break;
+                    }
+                }
+            }
+        }
+
+        private void CreateBotConflict(List<PlayerBot> allBots)
+        {
+            // Find PKs and potential targets
+            List<PlayerBot> pks = new List<PlayerBot>();
+            List<PlayerBot> targets = new List<PlayerBot>();
+            
+            foreach (PlayerBot bot in allBots)
+            {
+                if (bot.Combatant != null || bot.Controled)
+                    continue;
+                    
+                if (bot.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.PlayerKiller)
+                    pks.Add(bot);
+                else
+                    targets.Add(bot);
+            }
+
+            if (pks.Count > 0 && targets.Count > 0)
+            {
+                PlayerBot pk = pks[Utility.Random(pks.Count)];
+                PlayerBot target = targets[Utility.Random(targets.Count)];
+                
+                // Only if they're reasonably close
+                if (pk.GetDistanceToSqrt(target) < 50)
+                {
+                    pk.SayWithHue("Your gold or your life!");
+                    pk.LastSpeechTime = DateTime.Now;
+                    
+                    Timer.DelayCall(TimeSpan.FromSeconds(2), new TimerCallback(delegate()
+                    {
+                        if (target != null && !target.Deleted)
+                        {
+                            target.SayWithHue("Help! Murderer!");
+                            target.LastSpeechTime = DateTime.Now;
+                        }
+                    }));
+
+                    if (DEBUG_ENABLED)
+                        Console.WriteLine("[{0}] [PlayerBotDirector] Dynamic event: Bot conflict between '{1}' and '{2}'", 
+                            GetTimestamp(), pk.Name, target.Name);
+                }
+            }
+        }
+
+        private void CreateTradingEvent(List<PlayerBot> allBots)
+        {
+            List<PlayerBot> crafters = new List<PlayerBot>();
+            List<PlayerBot> others = new List<PlayerBot>();
+            
+            foreach (PlayerBot bot in allBots)
+            {
+                if (bot.Combatant != null || bot.Controled)
+                    continue;
+                    
+                if (bot.PlayerBotProfile == PlayerBotPersona.PlayerBotProfile.Crafter)
+                    crafters.Add(bot);
+                else
+                    others.Add(bot);
+            }
+
+            if (crafters.Count > 0 && others.Count > 0)
+            {
+                PlayerBot crafter = crafters[Utility.Random(crafters.Count)];
+                PlayerBot customer = others[Utility.Random(others.Count)];
+                
+                if (crafter.GetDistanceToSqrt(customer) < 30)
+                {
+                    crafter.SayWithHue("Quality goods for sale!");
+                    crafter.LastSpeechTime = DateTime.Now;
+                    
+                    Timer.DelayCall(TimeSpan.FromSeconds(3), new TimerCallback(delegate()
+                    {
+                        if (customer != null && !customer.Deleted)
+                        {
+                            customer.SayWithHue("What do you have available?");
+                            customer.LastSpeechTime = DateTime.Now;
+                        }
+                    }));
+
+                    if (DEBUG_ENABLED)
+                        Console.WriteLine("[{0}] [PlayerBotDirector] Dynamic event: Trading between '{1}' and '{2}'", 
+                            GetTimestamp(), crafter.Name, customer.Name);
+                }
+            }
+        }
+
+        private void CreateGroupActivity(List<PlayerBot> allBots)
+        {
+            // Find groups of bots near each other
+            Dictionary<Point3D, List<PlayerBot>> proximityGroups = new Dictionary<Point3D, List<PlayerBot>>();
+            
+            foreach (PlayerBot bot in allBots)
+            {
+                if (bot.Combatant != null || bot.Controled)
+                    continue;
+
+                Point3D groupKey = new Point3D(
+                    (bot.Location.X / 20) * 20,
+                    (bot.Location.Y / 20) * 20,
+                    0
+                );
+                
+                if (!proximityGroups.ContainsKey(groupKey))
+                    proximityGroups[groupKey] = new List<PlayerBot>();
+                
+                proximityGroups[groupKey].Add(bot);
+            }
+
+            foreach (List<PlayerBot> group in proximityGroups.Values)
+            {
+                if (group.Count >= 3) // Need at least 3 bots for group activity
+                {
+                    PlayerBot leader = group[Utility.Random(group.Count)];
+                    
+                    List<string> groupMessages = new List<string>();
+                    groupMessages.Add("Anyone interested in a group venture?");
+                    groupMessages.Add("There's safety in numbers.");
+                    groupMessages.Add("Shall we travel together?");
+                    
+                    string message = groupMessages[Utility.Random(groupMessages.Count)];
+                    leader.SayWithHue(message);
+                    leader.LastSpeechTime = DateTime.Now;
+
+                    if (DEBUG_ENABLED)
+                        Console.WriteLine("[{0}] [PlayerBotDirector] Dynamic event: Group activity initiated by '{1}' with {2} nearby bots", 
+                            GetTimestamp(), leader.Name, group.Count - 1);
+                    
+                    break; // Only one group activity per tick
+                }
+            }
+        }
+        #endregion
+
+        #region Helper Methods
         private bool InitiateBotTravel(PlayerBot bot)
         {
-            // Choose a random travel destination within the same map
+            // Choose a random travel destination within the same map (fallback method)
             Point3D currentLoc = bot.Location;
             Map map = bot.Map;
             
@@ -547,21 +1164,58 @@ namespace Server.Engines
                 return false;
             }
 
+            UpdateBotInfo(bot, BotBehaviorState.Traveling, destination);
+
             // Set the bot's destination (this will be handled by the AI)
             if (bot.AIObject != null)
             {
                 bot.AIObject.Action = ActionType.Wander;
-                // In a more sophisticated implementation, we'd set a specific destination
-                // For now, we'll just encourage wandering behavior
                 
                 if (DEBUG_ENABLED)
-                    Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' beginning travel from {2} towards {3} (distance: {4})", 
+                    Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' beginning random travel from {2} towards {3} (distance: {4})", 
                         GetTimestamp(), bot.Name, currentLoc, destination, distance);
                 
                 return true;
             }
 
             return false;
+        }
+
+        private RegionProfile GetBotCurrentRegion(PlayerBot bot)
+        {
+            foreach (RegionProfile region in m_Regions)
+            {
+                if (region.Map == bot.Map && region.Area.Contains(bot.Location))
+                    return region;
+            }
+            return null;
+        }
+
+        private string GetBotCurrentRegionName(PlayerBot bot)
+        {
+            RegionProfile region = GetBotCurrentRegion(bot);
+            return region != null ? region.Name : "Unknown";
+        }
+
+        private PointOfInterest GetNearestPOI(PlayerBot bot)
+        {
+            PointOfInterest nearest = null;
+            double nearestDistance = double.MaxValue;
+
+            foreach (PointOfInterest poi in m_PointsOfInterest)
+            {
+                if (poi.Map == bot.Map)
+                {
+                    double distance = bot.GetDistanceToSqrt(poi.Location);
+                    if (distance < nearestDistance)
+                    {
+                        nearest = poi;
+                        nearestDistance = distance;
+                    }
+                }
+            }
+
+            return nearest;
         }
 
         private void ProcessBotInteractions(List<PlayerBot> allBots)
