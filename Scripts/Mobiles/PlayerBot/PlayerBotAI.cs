@@ -351,7 +351,251 @@ namespace Server.Mobiles
                    DateTime.Now - m_LastMovementTime > TimeSpan.FromSeconds(10);
         }
 
+        /// <summary>
+        /// Override DoActionWander to make PlayerBots run during wandering for more dynamic movement
+        /// </summary>
+        public override bool DoActionWander()
+        {
+            // Check for combat first
+            if (AquireFocusMob(m_Mobile.RangePerception, m_Mobile.FightMode, false, false, true))
+            {
+                m_Mobile.DebugSay("I have detected {0}, attacking", m_Mobile.FocusMob.Name);
+                
+                // Store current destination before entering combat
+                if (HasDestination() && m_PreCombatDestination == Point3D.Zero)
+                {
+                    m_PreCombatDestination = m_TravelDestination;
+                    m_Mobile.DebugSay("Storing destination {0} before combat", m_PreCombatDestination);
+                }
+                
+                m_Mobile.Combatant = m_Mobile.FocusMob;
+                Action = ActionType.Combat;
+                return true;
+            }
 
+            // Handle destination-based travel (if any destinations are set)
+            if (HasDestination())
+            {
+                // Check if we've reached our destination
+                if (m_Mobile.InRange(m_TravelDestination, 5))
+                {
+                    m_Mobile.DebugSay("I have reached my destination: {0}", m_TravelDestination);
+                    ClearDestination();
+                    return true;
+                }
+
+                // Check for timeout (15 minutes - increased to give more time)
+                if (DateTime.Now - m_LastDestinationCheck > TimeSpan.FromMinutes(15))
+                {
+                    m_Mobile.DebugSay("Travel timeout reached, clearing destination");
+                    ClearDestination();
+                    return true;
+                }
+
+                // Clean old stuck locations periodically (every 5 minutes)
+                if (DateTime.Now - m_LastStuckLocationClear > TimeSpan.FromMinutes(5))
+                {
+                    m_StuckLocations.Clear();
+                    m_LastStuckLocationClear = DateTime.Now;
+                }
+
+                // Check if we're at a previously problematic location
+                if (IsAtStuckLocation())
+                {
+                    m_Mobile.DebugSay("At a stuck location, trying to escape");
+                    if (!TryEscapeStuckLocation())
+                    {
+                        m_Mobile.DebugSay("Cannot escape stuck location, abandoning destination");
+                        ClearDestination();
+                        return true;
+                    }
+                    return true;
+                }
+
+                // Always try to run when traveling - force running movement
+                bool moveSucceeded = TryRunningMovement();
+                
+                // Update movement tracking
+                UpdateMovementTracking();
+                
+                // Check if we got stuck after trying to move
+                if (IsStuck())
+                {
+                    m_Mobile.DebugSay("Detected stuck at {0}", m_Mobile.Location);
+                    AddStuckLocation(m_Mobile.Location);
+                    
+                    if (!TryEscapeStuckLocation())
+                    {
+                        m_Mobile.DebugSay("Cannot escape, abandoning destination {0}", m_TravelDestination);
+                        m_LastFailedDestination = m_TravelDestination;
+                        ClearDestination();
+                        return true;
+                    }
+                }
+                
+                if (moveSucceeded)
+                {
+                    m_Mobile.DebugSay("Running to destination: {0} (distance: {1})", m_TravelDestination, m_Mobile.GetDistanceToSqrt(m_TravelDestination));
+                }
+                else
+                {
+                    m_Mobile.DebugSay("Movement failed, will retry next tick");
+                }
+                
+                return true;
+            }
+
+            // Enhanced wandering behavior with running - much more dynamic than base class
+            if (CheckHerding())
+            {
+                m_Mobile.DebugSay("Praise the shepherd!");
+            }
+            else if (m_Mobile.CurrentWayPoint != null)
+            {
+                WayPoint point = m_Mobile.CurrentWayPoint;
+                if ((point.X != m_Mobile.Location.X || point.Y != m_Mobile.Location.Y) && point.Map == m_Mobile.Map && point.Parent == null && !point.Deleted)
+                {
+                    m_Mobile.DebugSay("I will run towards my waypoint.");
+                    Direction dir = m_Mobile.GetDirectionTo(m_Mobile.CurrentWayPoint);
+                    DoMove(dir | Direction.Running); // Run to waypoint
+                }
+                else if (OnAtWayPoint())
+                {
+                    m_Mobile.DebugSay("I will go to the next waypoint");
+                    m_Mobile.CurrentWayPoint = point.NextPoint;
+                    if (point.NextPoint != null && point.NextPoint.Deleted)
+                        m_Mobile.CurrentWayPoint = point.NextPoint = point.NextPoint.NextPoint;
+                }
+            }
+            else if (m_Mobile.IsAnimatedDead)
+            {
+                // animated dead follow their master
+                Mobile master = m_Mobile.SummonMaster;
+
+                if (master != null && master.Map == m_Mobile.Map && master.InRange(m_Mobile, m_Mobile.RangePerception))
+                    MoveTo(master, true, 1); // Run to master
+                else
+                    WalkRandomInHomeRunning(2, 2, 1); // Run while wandering
+            }
+            else if (CheckMove())
+            {
+                if (!m_Mobile.CheckIdle())
+                    WalkRandomInHomeRunning(2, 2, 1); // Run while wandering - this is the main enhancement!
+            }
+
+            if (m_Mobile.Combatant != null && !m_Mobile.Combatant.Deleted && m_Mobile.Combatant.Alive && !m_Mobile.Combatant.IsDeadBondedPet)
+            {
+                m_Mobile.Direction = m_Mobile.GetDirectionTo(m_Mobile.Combatant);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Custom running version of WalkRandomInHome for PlayerBots
+        /// </summary>
+        private void WalkRandomInHomeRunning(int iChanceToNotMove, int iChanceToDir, int iSteps)
+        {
+            if (m_Mobile.Deleted || m_Mobile.DisallowAllMoves)
+                return;
+
+            if (m_Mobile.Home == Point3D.Zero)
+            {
+                WalkRandomRunning(iChanceToNotMove, iChanceToDir, iSteps);
+            }
+            else
+            {
+                for (int i = 0; i < iSteps; i++)
+                {
+                    if (m_Mobile.RangeHome != 0)
+                    {
+                        int iCurrDist = (int)m_Mobile.GetDistanceToSqrt(m_Mobile.Home);
+
+                        if (iCurrDist < m_Mobile.RangeHome * 2 / 3)
+                        {
+                            WalkRandomRunning(iChanceToNotMove, iChanceToDir, 1);
+                        }
+                        else if (iCurrDist > m_Mobile.RangeHome)
+                        {
+                            Direction dir = m_Mobile.GetDirectionTo(m_Mobile.Home);
+                            DoMove(dir | Direction.Running); // Run home
+                        }
+                        else
+                        {
+                            if (Utility.Random(10) > 5)
+                            {
+                                Direction dir = m_Mobile.GetDirectionTo(m_Mobile.Home);
+                                DoMove(dir | Direction.Running); // Run towards home
+                            }
+                            else
+                            {
+                                WalkRandomRunning(iChanceToNotMove, iChanceToDir, 1);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (m_Mobile.Location != m_Mobile.Home)
+                        {
+                            Direction dir = m_Mobile.GetDirectionTo(m_Mobile.Home);
+                            DoMove(dir | Direction.Running); // Run to exact home spot
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Custom running version of WalkRandom for PlayerBots
+        /// </summary>
+        private void WalkRandomRunning(int iChanceToNotMove, int iChanceToDir, int iSteps)
+        {
+            if (m_Mobile.Deleted || m_Mobile.DisallowAllMoves)
+                return;
+
+            for (int i = 0; i < iSteps; i++)
+            {
+                if (Utility.Random(8 * iChanceToNotMove) <= 8)
+                {
+                    int iRndMove = Utility.Random(0, 8 + (9 * iChanceToDir));
+
+                    Direction dir;
+                    switch (iRndMove)
+                    {
+                        case 0:
+                            dir = Direction.Up;
+                            break;
+                        case 1:
+                            dir = Direction.North;
+                            break;
+                        case 2:
+                            dir = Direction.Left;
+                            break;
+                        case 3:
+                            dir = Direction.West;
+                            break;
+                        case 5:
+                            dir = Direction.Down;
+                            break;
+                        case 6:
+                            dir = Direction.South;
+                            break;
+                        case 7:
+                            dir = Direction.Right;
+                            break;
+                        case 8:
+                            dir = Direction.East;
+                            break;
+                        default:
+                            dir = m_Mobile.Direction;
+                            break;
+                    }
+                    
+                    // Add running flag to make them run!
+                    DoMove(dir | Direction.Running);
+                }
+            }
+        }
 
         public override bool Think()
         {
@@ -596,103 +840,6 @@ namespace Server.Mobiles
             {
                 m_Mobile.DebugSay("I am stuck");
             }
-        }
-
-        public override bool DoActionWander()
-        {
-            // Check for combat first
-            if (AquireFocusMob(m_Mobile.RangePerception, m_Mobile.FightMode, false, false, true))
-            {
-                m_Mobile.DebugSay("I have detected {0}, attacking", m_Mobile.FocusMob.Name);
-                
-                // Store current destination before entering combat
-                if (HasDestination() && m_PreCombatDestination == Point3D.Zero)
-                {
-                    m_PreCombatDestination = m_TravelDestination;
-                    m_Mobile.DebugSay("Storing destination {0} before combat", m_PreCombatDestination);
-                }
-                
-                m_Mobile.Combatant = m_Mobile.FocusMob;
-                Action = ActionType.Combat;
-                return true;
-            }
-
-            // Handle destination-based travel
-            if (HasDestination())
-            {
-                // Check if we've reached our destination
-                if (m_Mobile.InRange(m_TravelDestination, 5))
-                {
-                    m_Mobile.DebugSay("I have reached my destination: {0}", m_TravelDestination);
-                    ClearDestination();
-                    return true;
-                }
-
-                // Check for timeout (15 minutes - increased to give more time)
-                if (DateTime.Now - m_LastDestinationCheck > TimeSpan.FromMinutes(15))
-                {
-                    m_Mobile.DebugSay("Travel timeout reached, clearing destination");
-                    ClearDestination();
-                    return true;
-                }
-
-                // Clean old stuck locations periodically (every 5 minutes)
-                if (DateTime.Now - m_LastStuckLocationClear > TimeSpan.FromMinutes(5))
-                {
-                    m_StuckLocations.Clear();
-                    m_LastStuckLocationClear = DateTime.Now;
-                }
-
-                // Check if we're at a previously problematic location
-                if (IsAtStuckLocation())
-                {
-                    m_Mobile.DebugSay("At a stuck location, trying to escape");
-                    if (!TryEscapeStuckLocation())
-                    {
-                        m_Mobile.DebugSay("Cannot escape stuck location, abandoning destination");
-                        ClearDestination();
-                        return true;
-                    }
-                    return true;
-                }
-
-                // Always try to run when traveling - force running movement
-                bool moveSucceeded = TryRunningMovement();
-                
-                // Update movement tracking
-                UpdateMovementTracking();
-                
-                // Check if we got stuck after trying to move
-                if (IsStuck())
-                {
-                    m_Mobile.DebugSay("Detected stuck at {0}", m_Mobile.Location);
-                    AddStuckLocation(m_Mobile.Location);
-                    
-                    if (!TryEscapeStuckLocation())
-                    {
-                        m_Mobile.DebugSay("Cannot escape, abandoning destination {0}", m_TravelDestination);
-                        m_LastFailedDestination = m_TravelDestination;
-                        ClearDestination();
-                        return true;
-                    }
-                }
-                
-                if (moveSucceeded)
-                {
-                    m_Mobile.DebugSay("Running to destination: {0} (distance: {1})", m_TravelDestination, m_Mobile.GetDistanceToSqrt(m_TravelDestination));
-                }
-                else
-                {
-                    m_Mobile.DebugSay("Movement failed, will retry next tick");
-                }
-                
-                return true;
-            }
-
-            // Default wandering behavior
-            m_Mobile.DebugSay("I have no combatant or destination");
-            base.DoActionWander();
-            return true;
         }
 
         public override bool DoActionCombat()

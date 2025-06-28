@@ -26,7 +26,7 @@ namespace Server.Commands
             CommandSystem.Register("ForceScene", AccessLevel.GameMaster, new CommandEventHandler(ForceScene_OnCommand));
             CommandSystem.Register("SceneStatus", AccessLevel.GameMaster, new CommandEventHandler(SceneStatus_OnCommand));
             CommandSystem.Register("WarSceneTest", AccessLevel.GameMaster, new CommandEventHandler(WarSceneTest_OnCommand));
-            CommandSystem.Register("FixCaravanKarma", AccessLevel.GameMaster, new CommandEventHandler(FixCaravanKarma_OnCommand));
+
             CommandSystem.Register("TestLandmass", AccessLevel.GameMaster, new CommandEventHandler(TestLandmass_OnCommand));
             CommandSystem.Register("TestCombatResume", AccessLevel.GameMaster, new CommandEventHandler(TestCombatResume_OnCommand));
             CommandSystem.Register("TestBotTravel", AccessLevel.GameMaster, new CommandEventHandler(TestBotTravel_OnCommand));
@@ -54,8 +54,6 @@ namespace Server.Commands
                     GetActiveRegionCount());
                 from.SendMessage("- {0} points of interest loaded", 
                     PlayerBotConfigurationManager.PointsOfInterest.Count);
-                from.SendMessage("- {0} travel routes loaded", 
-                    PlayerBotConfigurationManager.TravelRoutes.Count);
                 from.SendMessage("- Behavior settings updated");
                 from.SendMessage("- Last loaded: {0}", 
                     PlayerBotConfigurationManager.LastLoadTime.ToString("yyyy-MM-dd HH:mm:ss"));
@@ -389,7 +387,7 @@ namespace Server.Commands
 
         #region Scene Management Commands
         [Usage("CreateScene <type> [count]")]
-        [Description("Creates a scene at your location. Types: War, Caravan. Optional count parameter for War scenes (default: 8).")]
+        [Description("Creates a scene at your location. Types: War. Optional count parameter for War scenes (default: 8).")]
         public static void CreateScene_OnCommand(CommandEventArgs e)
         {
             Mobile from = e.Mobile;
@@ -397,7 +395,7 @@ namespace Server.Commands
             if (e.Arguments.Length < 1)
             {
                 from.SendMessage("Usage: [CreateScene <type> [count]");
-                from.SendMessage("Available types: War, Caravan");
+                from.SendMessage("Available types: War");
                 from.SendMessage("War scenes accept optional participant count (default: 8)");
                 return;
             }
@@ -424,20 +422,10 @@ namespace Server.Commands
                         scene = new Server.Engines.Scenes.WarScene(from.Location, from.Map, participantCount);
                         break;
                         
-                    case "caravan":
-                        // Find a suitable destination for the caravan
-                        Point3D destination = FindCaravanDestination(from.Location, from.Map);
-                        if (destination == Point3D.Zero)
-                        {
-                            from.SendMessage("Could not find a suitable destination for the caravan from this location.");
-                            return;
-                        }
-                        
-                        scene = new Server.Engines.Scenes.MerchantCaravanScene(from.Location, destination, from.Map);
-                        break;
+
                         
                     default:
-                        from.SendMessage("Unknown scene type '{0}'. Available types: War, Caravan", sceneType);
+                        from.SendMessage("Unknown scene type '{0}'. Available types: War", sceneType);
                         return;
                 }
                 
@@ -488,12 +476,7 @@ namespace Server.Commands
                     Server.Engines.Scenes.WarScene warScene = scene as Server.Engines.Scenes.WarScene;
                     from.SendMessage("  War Type: {0}", warScene.WarType);
                 }
-                else if (scene is Server.Engines.Scenes.MerchantCaravanScene)
-                {
-                    Server.Engines.Scenes.MerchantCaravanScene caravanScene = scene as Server.Engines.Scenes.MerchantCaravanScene;
-                    from.SendMessage("  Destination: {0}", caravanScene.Destination);
-                    from.SendMessage("  Progress: {0:F1}%", caravanScene.GetProgress() * 100);
-                }
+
                 
                 from.SendMessage("");
             }
@@ -625,72 +608,10 @@ namespace Server.Commands
                 from.SendMessage("Faction A: {0} members", warScene.GetFactionACount());
                 from.SendMessage("Faction B: {0} members", warScene.GetFactionBCount());
             }
-            else if (scene is Server.Engines.Scenes.MerchantCaravanScene)
-            {
-                Server.Engines.Scenes.MerchantCaravanScene caravanScene = scene as Server.Engines.Scenes.MerchantCaravanScene;
-                from.SendMessage("=== Caravan Scene Details ===");
-                from.SendMessage("Start Location: {0}", caravanScene.CenterLocation);
-                from.SendMessage("Destination: {0}", caravanScene.Destination);
-                from.SendMessage("Progress: {0:F1}%", caravanScene.GetProgress() * 100);
-                from.SendMessage("Merchants: {0}", caravanScene.GetMerchantCount());
-                from.SendMessage("Guards: {0}", caravanScene.GetGuardCount());
-            }
+
         }
 
-        private static Point3D FindCaravanDestination(Point3D start, Map map)
-        {
-            // Try to find a suitable destination from the available regions
-            List<PlayerBotConfigurationManager.RegionConfig> possibleDestinations = new List<PlayerBotConfigurationManager.RegionConfig>();
-            
-            foreach (PlayerBotConfigurationManager.RegionConfig region in PlayerBotConfigurationManager.Regions.Values)
-            {
-                if (region.Active && region.Map == map)
-                {
-                    // Calculate distance
-                    Point3D regionCenter = new Point3D(
-                        (region.Bounds.X + region.Bounds.Width / 2),
-                        (region.Bounds.Y + region.Bounds.Height / 2),
-                        0);
-                    
-                    double distance = Math.Sqrt(Math.Pow(start.X - regionCenter.X, 2) + Math.Pow(start.Y - regionCenter.Y, 2));
-                    
-                    // Only consider destinations that are reasonably far away (at least 50 tiles)
-                    // AND on the same landmass
-                    if (distance >= 50 && distance <= 200 && AreOnSameLandmass(start, regionCenter, map))
-                    {
-                        possibleDestinations.Add(region);
-                    }
-                }
-            }
-            
-            if (possibleDestinations.Count > 0)
-            {
-                PlayerBotConfigurationManager.RegionConfig chosen = possibleDestinations[Utility.Random(possibleDestinations.Count)];
-                return new Point3D(
-                    chosen.Bounds.X + chosen.Bounds.Width / 2,
-                    chosen.Bounds.Y + chosen.Bounds.Height / 2,
-                    0);
-            }
-            
-            // Fallback: create a destination some distance away on same landmass
-            for (int i = 0; i < 10; i++)
-            {
-                int angle = Utility.Random(360);
-                int fallbackDistance = Utility.RandomMinMax(75, 150);
-                
-                int x = start.X + (int)(Math.Cos(angle * Math.PI / 180) * fallbackDistance);
-                int y = start.Y + (int)(Math.Sin(angle * Math.PI / 180) * fallbackDistance);
-                Point3D dest = new Point3D(x, y, start.Z);
-                
-                // Make sure fallback destination is on same landmass
-                if (AreOnSameLandmass(start, dest, map))
-                {
-                    return dest;
-                }
-            }
-            
-            return Point3D.Zero;
-        }
+
 
         /// <summary>
         /// Check if two points are on the same landmass (can be reached without crossing water)
@@ -853,29 +774,7 @@ namespace Server.Commands
                 from.SendMessage("Not in a region - war scenes require configured regions.");
             }
             
-            // Check caravan scene requirements  
-            from.SendMessage("");
-            from.SendMessage("=== Caravan Scene Requirements ===");
-            if (currentRegion != null)
-            {
-                bool hasSpace = currentRegion.Area.Width >= 50 && currentRegion.Area.Height >= 50;
-                
-                from.SendMessage("Region Size: {0}x{1} {2}", currentRegion.Area.Width, currentRegion.Area.Height,
-                    hasSpace ? "(GOOD - large enough)" : "(BAD - too small, need 50x50)");
-                
-                if (hasSpace)
-                {
-                    from.SendMessage("✓ This region CAN support caravan scenes!");
-                }
-                else
-                {
-                    from.SendMessage("✗ This region CANNOT support caravan scenes.");
-                }
-            }
-            else
-            {
-                from.SendMessage("Not in a region - caravan scenes require configured regions.");
-            }
+
             
             // Show scene creation settings
             from.SendMessage("");
@@ -898,7 +797,7 @@ namespace Server.Commands
             from.SendMessage("World PlayerBots: {0}", Server.Engines.PlayerBotDirector.Instance.GetWorldPlayerBotCount());
         }
 
-        [Usage("[ForceScene <war|caravan>")]
+        [Usage("[ForceScene <war>")]
         [Description("Force create a scene at your location for testing (bypasses normal requirements)")]
         public static void ForceScene_OnCommand(CommandEventArgs e)
         {
@@ -906,7 +805,7 @@ namespace Server.Commands
             
             if (e.Arguments.Length < 1)
             {
-                from.SendMessage("Usage: [ForceScene <war|caravan>");
+                from.SendMessage("Usage: [ForceScene <war>");
                 return;
             }
             
@@ -975,48 +874,10 @@ namespace Server.Commands
                         }
                     }
                 }
-                else if (sceneType == "caravan")
-                {
-                    from.SendMessage("Creating forced caravan scene at your location...");
-                    from.SendMessage("Location: {0} on {1}", from.Location, from.Map);
-                    
-                    // Create caravan scene with a destination 100 tiles away
-                    Point3D destination = new Point3D(
-                        from.X + Utility.RandomMinMax(-100, 100),
-                        from.Y + Utility.RandomMinMax(-100, 100),
-                        from.Z
-                    );
-                    
-                    from.SendMessage("Destination: {0}", destination);
-                    
-                    scene = new Server.Engines.Scenes.MerchantCaravanScene(from.Location, destination, from.Map);
-                    
-                    // Force initialize the scene to spawn bots
-                    from.SendMessage("Initializing scene...");
-                    scene.Initialize();
-                    from.SendMessage("Caravan scene initialized with {0} participants", scene.GetParticipantCount());
-                    
-                    // Debug participant details
-                    System.Collections.Generic.List<PlayerBot> participants = scene.GetParticipants();
-                    if (participants.Count > 0)
-                    {
-                        from.SendMessage("Participants spawned successfully:");
-                        foreach (PlayerBot bot in participants)
-                        {
-                            if (bot != null && !bot.Deleted)
-                            {
-                                from.SendMessage("  - {0} at {1}", bot.Name, bot.Location);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        from.SendMessage("WARNING: No participants were spawned!");
-                    }
-                }
+
                 else
                 {
-                    from.SendMessage("Invalid scene type. Use 'war' or 'caravan'");
+                    from.SendMessage("Invalid scene type. Use 'war'");
                     return;
                 }
                 
@@ -1172,7 +1033,7 @@ namespace Server.Commands
             {
                 double chancePerTick = PlayerBotConfigurationManager.BehaviorSettings.DynamicEventChance / 100.0;
                 double chancePerRegion = chancePerTick / regions.Count;
-                double warChancePerTick = chancePerRegion * eligibleRegions * 0.5; // Assume 50% chance war vs caravan
+                double warChancePerTick = chancePerRegion * eligibleRegions; // War scenes only now
                 
                 from.SendMessage("Estimated war scene chance per tick: {0:F2}%", warChancePerTick * 100);
                 from.SendMessage("Average time between war scenes: {0:F1} minutes", 
@@ -1180,47 +1041,7 @@ namespace Server.Commands
             }
         }
 
-        [Usage("[FixCaravanKarma")]
-        [Description("Fix karma issues in active caravan scenes")]
-        public static void FixCaravanKarma_OnCommand(CommandEventArgs e)
-        {
-            Mobile from = e.Mobile;
-            
-            System.Collections.Generic.List<PlayerBotScene> activeScenes = PlayerBotDirector.Instance.GetActiveScenes();
-            int fixedBots = 0;
-            
-            foreach (PlayerBotScene scene in activeScenes)
-            {
-                if (scene is Server.Engines.Scenes.MerchantCaravanScene)
-                {
-                    System.Collections.Generic.List<PlayerBot> participants = scene.GetParticipants();
-                    foreach (PlayerBot bot in participants)
-                    {
-                        if (bot != null && !bot.Deleted)
-                        {
-                            // Merchants and guards should both be good-aligned
-                            if (bot.Name.Contains("Merchant"))
-                            {
-                                bot.Karma = Utility.Random(50, 200); // Clearly good
-                                bot.Say("*adjusts karma as an honest merchant*");
-                            }
-                            else if (bot.Name.Contains("Guard"))
-                            {
-                                bot.Karma = Utility.Random(100, 300); // Very good (lawful)
-                                bot.Say("*straightens up as a lawful guard*");
-                            }
-                            fixedBots++;
-                        }
-                    }
-                }
-            }
-            
-            from.SendMessage("Fixed karma for {0} caravan participants.", fixedBots);
-            if (fixedBots > 0)
-            {
-                from.SendMessage("Caravan members should now be properly aligned and not attack each other.");
-            }
-        }
+
 
         [Usage("[BotStuckDiagnostic <botName>")]
         [Description("Show stuck detection status for a PlayerBot")]
@@ -1335,7 +1156,7 @@ namespace Server.Commands
         }
 
         [Usage("[TestLandmass <x> <y>")]
-        [Description("Test landmass detection for cross-island caravan prevention")]
+        [Description("Test landmass detection for cross-island prevention")]
         public static void TestLandmass_OnCommand(CommandEventArgs e)
         {
             Mobile from = e.Mobile;
@@ -1357,7 +1178,7 @@ namespace Server.Commands
                     
                     from.SendMessage("Test location: {0}", testPoint);
                     from.SendMessage("Test landmass ID: {0} ({1})", testLandmass, GetLandmassName(testLandmass));
-                    from.SendMessage("Same landmass: {0}", sameLandmass ? "YES - Caravan allowed" : "NO - Caravan blocked");
+                    from.SendMessage("Same landmass: {0}", sameLandmass ? "YES" : "NO");
                 }
                 else
                 {
@@ -1556,7 +1377,6 @@ namespace Server.Commands
             from.SendMessage("");
             
             int warEligible = 0;
-            int caravanEligible = 0;
             
             foreach (PlayerBotDirector.RegionProfile region in regions)
             {
@@ -1587,35 +1407,14 @@ namespace Server.Commands
                     from.SendMessage("Error testing war scene for {0}: {1}", region.Name, ex.Message);
                 }
                 
-                // Test caravan scene eligibility  
-                bool caravanCanTrigger = false;
-                try
-                {
-                    Point3D regionStart = new Point3D(region.Area.X, region.Area.Y, 0);
-                    Point3D destination = new Point3D(
-                        region.Area.X + region.Area.Width + 100,
-                        region.Area.Y + region.Area.Height + 100,
-                        0
-                    );
-                    Server.Engines.Scenes.MerchantCaravanScene testCaravan = new Server.Engines.Scenes.MerchantCaravanScene(regionStart, destination, region.Map);
-                    caravanCanTrigger = testCaravan.CanTrigger(region, playersInRegion);
-                    testCaravan = null; // Don't actually create it
-                }
-                catch (Exception ex)
-                {
-                    from.SendMessage("Error testing caravan scene for {0}: {1}", region.Name, ex.Message);
-                }
-                
                 if (warCanTrigger) warEligible++;
-                if (caravanCanTrigger) caravanEligible++;
                 
                 string warStatus = warCanTrigger ? "YES" : "no";
-                string caravanStatus = caravanCanTrigger ? "YES" : "no";
                 
                 from.SendMessage("{0}:", region.Name);
                 from.SendMessage("  Safety: {0} | Players: {1} | Size: {2}x{3}", 
                     region.SafetyLevel, playersInRegion.Count, region.Area.Width, region.Area.Height);
-                from.SendMessage("  War: {0} | Caravan: {1}", warStatus, caravanStatus);
+                from.SendMessage("  War: {0}", warStatus);
                 
                 // Explain why war scenes can't trigger
                 if (!warCanTrigger)
@@ -1633,7 +1432,7 @@ namespace Server.Commands
             
             from.SendMessage("=== Summary ===");
             from.SendMessage("Regions eligible for war scenes: {0}/{1}", warEligible, regions.Count);
-            from.SendMessage("Regions eligible for caravan scenes: {0}/{1}", caravanEligible, regions.Count);
+
             from.SendMessage("");
             
             if (warEligible == 0)
@@ -1655,7 +1454,7 @@ namespace Server.Commands
             else
             {
                 double chancePerTick = PlayerBotConfigurationManager.BehaviorSettings.DynamicEventChance / 100.0;
-                double warChancePerTick = (chancePerTick / regions.Count) * warEligible * 0.5; // Assume 50% war vs caravan split
+                double warChancePerTick = (chancePerTick / regions.Count) * warEligible;
                 
                 from.SendMessage("Estimated organic war chance per tick: {0:F2}%", warChancePerTick * 100);
                 if (warChancePerTick > 0)
@@ -1839,22 +1638,8 @@ namespace Server.Commands
                 
                 // Test caravan scene eligibility  
                 bool caravanCanTrigger = false;
-                try
-                {
-                    Point3D regionStart = new Point3D(region.Area.X, region.Area.Y, 0);
-                    Point3D destination = new Point3D(
-                        region.Area.X + region.Area.Width + 100,
-                        region.Area.Y + region.Area.Height + 100,
-                        0
-                    );
-                    Server.Engines.Scenes.MerchantCaravanScene testCaravan = new Server.Engines.Scenes.MerchantCaravanScene(regionStart, destination, region.Map);
-                    caravanCanTrigger = testCaravan.CanTrigger(region, emptyPlayerList);
-                    testCaravan = null;
-                }
-                catch (Exception ex)
-                {
-                    from.SendMessage("Error testing caravan scene for {0}: {1}", region.Name, ex.Message);
-                }
+                // Caravan scenes removed
+                caravanCanTrigger = false;
                 
                 if (warCanTrigger) warEligible++;
                 if (caravanCanTrigger) caravanEligible++;
@@ -1873,7 +1658,7 @@ namespace Server.Commands
                 from.SendMessage("Expected war scenes should be much more common now.");
                 
                 double chancePerTick = PlayerBotConfigurationManager.BehaviorSettings.DynamicEventChance / 100.0;
-                double warChancePerTick = (chancePerTick / regions.Count) * warEligible * 0.5; // Assume 50% war vs caravan split
+                double warChancePerTick = (chancePerTick / regions.Count) * warEligible; // War scenes only
                 
                 from.SendMessage("Estimated organic war chance per tick: {0:F2}%", warChancePerTick * 100);
                 if (warChancePerTick > 0)
@@ -1983,35 +1768,9 @@ namespace Server.Commands
                     warFailReason = "Exception: " + ex.Message;
                 }
                 
-                // Test caravan scene eligibility
+                // Caravan scenes removed
                 bool caravanCanTrigger = false;
-                string caravanFailReason = "";
-                
-                try
-                {
-                    Point3D regionStart = new Point3D(region.Area.X, region.Area.Y, 0);
-                    Point3D destination = new Point3D(
-                        region.Area.X + region.Area.Width + 100,
-                        region.Area.Y + region.Area.Height + 100,
-                        0
-                    );
-                    Server.Engines.Scenes.MerchantCaravanScene testCaravan = new Server.Engines.Scenes.MerchantCaravanScene(regionStart, destination, region.Map);
-                    caravanCanTrigger = testCaravan.CanTrigger(region, playersInRegion);
-                    
-                    if (!caravanCanTrigger)
-                    {
-                        if (region.Area.Width < 50 || region.Area.Height < 50)
-                            caravanFailReason = "Too small";
-                        else
-                            caravanFailReason = "Unknown reason";
-                    }
-                    
-                    testCaravan = null;
-                }
-                catch (Exception ex)
-                {
-                    caravanFailReason = "Exception: " + ex.Message;
-                }
+                string caravanFailReason = "Removed";
                 
                 if (warCanTrigger)
                 {
@@ -2052,7 +1811,7 @@ namespace Server.Commands
                 // Calculate actual probability
                 double eventChance = PlayerBotConfigurationManager.BehaviorSettings.DynamicEventChance / 100.0;
                 double chancePerRegion = eventChance / regions.Count;
-                double warChancePerTick = chancePerRegion * warEligible * 0.5; // Assume 50/50 war vs caravan
+                double warChancePerTick = chancePerRegion * warEligible; // War scenes only
                 
                 from.SendMessage("Scene creation math:");
                 from.SendMessage("  Event chance per tick: {0}%", eventChance * 100);

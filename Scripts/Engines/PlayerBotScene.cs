@@ -15,7 +15,6 @@ namespace Server.Engines
         public enum SceneType
         {
             War,
-            MerchantCaravan,
             BanditAmbush,
             PKPatrol,
             CrafterMarket

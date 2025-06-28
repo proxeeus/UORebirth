@@ -91,7 +91,7 @@ namespace Server.Engines.Scenes
             if (region.SafetyLevel == PlayerBotConfigurationManager.SafetyLevel.Safe)
                 return false;
             
-            // Don't require players (background activity like caravans)
+            // Don't require players (background activity)
             // Wars can happen in remote areas without witnesses
             
             // Check if area is suitable for combat

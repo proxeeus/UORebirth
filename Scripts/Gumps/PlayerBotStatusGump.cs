@@ -507,32 +507,12 @@ namespace Server.Gumps
             AddLabel(400, y, LabelHue, config.BehaviorTickSeconds + " seconds");
             y += 20;
 
-            AddLabel(220, y, LabelHue, "Travel Chance:");
-            AddLabel(400, y, LabelHue, config.TravelChancePercent + "%");
-            y += 20;
-
             AddLabel(220, y, LabelHue, "Interaction Chance:");
             AddLabel(400, y, LabelHue, config.InteractionChancePercent + "%");
             y += 20;
 
             AddLabel(220, y, LabelHue, "Shop Visit Chance:");
             AddLabel(400, y, LabelHue, config.ShopVisitChance + "%");
-            y += 30;
-
-            // Travel Settings
-            AddHtml(210, y, 520, 20, Color(Center("Travel Settings"), SelectedColor32), false, false);
-            y += 30;
-
-            AddLabel(220, y, LabelHue, "Min Travel Distance:");
-            AddLabel(400, y, LabelHue, config.MinTravelDistance + " tiles");
-            y += 20;
-
-            AddLabel(220, y, LabelHue, "Max Travel Distance:");
-            AddLabel(400, y, LabelHue, config.MaxTravelDistance + " tiles");
-            y += 20;
-
-            AddLabel(220, y, LabelHue, "Inter-Region Travel:");
-            AddLabel(400, y, LabelHue, config.InterRegionTravelChance + "%");
             y += 30;
 
             // Logging Settings
@@ -567,9 +547,7 @@ namespace Server.Gumps
             AddLabel(400, y, LabelHue, PlayerBotConfigurationManager.PointsOfInterest.Count.ToString());
             y += 20;
 
-            AddLabel(220, y, LabelHue, "Routes Loaded:");
-            AddLabel(400, y, LabelHue, PlayerBotConfigurationManager.TravelRoutes.Count.ToString());
-            y += 20;
+
 
             AddLabel(220, y, LabelHue, "Last Loaded:");
             AddLabel(400, y, LabelHue, PlayerBotConfigurationManager.LastLoadTime.ToString("yyyy-MM-dd HH:mm:ss"));
@@ -706,29 +684,24 @@ namespace Server.Gumps
 
             // Count scenes by type
             int warScenes = 0;
-            int caravanScenes = 0;
             foreach (PlayerBotScene scene in activeScenes)
             {
                 if (scene is Server.Engines.Scenes.WarScene)
                     warScenes++;
-                else if (scene is Server.Engines.Scenes.MerchantCaravanScene)
-                    caravanScenes++;
+
             }
 
             AddLabel(220, y, LabelHue, "War Scenes:");
             AddLabel(400, y, warScenes > 0 ? RedHue : LabelHue, warScenes.ToString());
             y += 20;
 
-            AddLabel(220, y, LabelHue, "Caravan Scenes:");
-            AddLabel(400, y, caravanScenes > 0 ? BlueHue : LabelHue, caravanScenes.ToString());
-            y += 30;
+            y += 10;
 
             // Scene Creation
             AddHtml(210, y, 520, 20, Color(Center("Create New Scene"), SelectedColor32), false, false);
             y += 30;
 
             AddButtonLabeled(220, y, GetButtonID(4, 0), "Create War Scene");
-            AddButtonLabeled(380, y, GetButtonID(4, 1), "Create Caravan Scene");
             y += 30;
 
             // Active Scenes List
@@ -764,7 +737,7 @@ namespace Server.Gumps
                     AddLabel(220, y, LabelHue, scene.SceneId.ToString());
 
                     // Scene Type with color coding
-                    int typeHue = sceneType == "War" ? RedHue : (sceneType == "MerchantCaravan" ? BlueHue : LabelHue);
+                    int typeHue = sceneType == "War" ? RedHue : LabelHue;
                     AddLabel(250, y, typeHue, sceneType);
 
                     // State
@@ -1059,60 +1032,7 @@ namespace Server.Gumps
             return "Free";
         }
 
-        private Point3D FindCaravanDestination(Point3D start, Map map)
-        {
-            // Try to find a suitable destination from the available regions
-            List<PlayerBotConfigurationManager.RegionConfig> possibleDestinations = new List<PlayerBotConfigurationManager.RegionConfig>();
-            
-            foreach (PlayerBotConfigurationManager.RegionConfig region in PlayerBotConfigurationManager.Regions.Values)
-            {
-                if (region.Active && region.Map == map)
-                {
-                    // Calculate distance
-                    Point3D regionCenter = new Point3D(
-                        (region.Bounds.X + region.Bounds.Width / 2),
-                        (region.Bounds.Y + region.Bounds.Height / 2),
-                        0);
-                    
-                    double distance = Math.Sqrt(Math.Pow(start.X - regionCenter.X, 2) + Math.Pow(start.Y - regionCenter.Y, 2));
-                    
-                    // Only consider destinations that are reasonably far away (at least 50 tiles)
-                    // AND on the same landmass
-                    if (distance >= 50 && distance <= 200 && AreOnSameLandmass(start, regionCenter, map))
-                    {
-                        possibleDestinations.Add(region);
-                    }
-                }
-            }
-            
-            if (possibleDestinations.Count > 0)
-            {
-                PlayerBotConfigurationManager.RegionConfig chosen = possibleDestinations[Utility.Random(possibleDestinations.Count)];
-                return new Point3D(
-                    chosen.Bounds.X + chosen.Bounds.Width / 2,
-                    chosen.Bounds.Y + chosen.Bounds.Height / 2,
-                    0);
-            }
-            
-            // Fallback: create a destination some distance away on same landmass
-            for (int i = 0; i < 10; i++)
-            {
-                int angle = Utility.Random(360);
-                int fallbackDistance = Utility.RandomMinMax(75, 150);
-                
-                int x = start.X + (int)(Math.Cos(angle * Math.PI / 180) * fallbackDistance);
-                int y = start.Y + (int)(Math.Sin(angle * Math.PI / 180) * fallbackDistance);
-                Point3D dest = new Point3D(x, y, start.Z);
-                
-                // Make sure fallback destination is on same landmass
-                if (AreOnSameLandmass(start, dest, map))
-                {
-                    return dest;
-                }
-            }
-            
-            return Point3D.Zero;
-        }
+
 
         /// <summary>
         /// Check if two points are on the same landmass (can be reached without crossing water)
@@ -1218,16 +1138,7 @@ namespace Server.Gumps
                 from.SendMessage("Faction A: {0} members", warScene.GetFactionACount());
                 from.SendMessage("Faction B: {0} members", warScene.GetFactionBCount());
             }
-            else if (scene is Server.Engines.Scenes.MerchantCaravanScene)
-            {
-                Server.Engines.Scenes.MerchantCaravanScene caravanScene = scene as Server.Engines.Scenes.MerchantCaravanScene;
-                from.SendMessage("=== Caravan Scene Details ===");
-                from.SendMessage("Start Location: {0}", caravanScene.CenterLocation);
-                from.SendMessage("Destination: {0}", caravanScene.Destination);
-                from.SendMessage("Progress: {0:F1}%", caravanScene.GetProgress() * 100);
-                from.SendMessage("Merchants: {0}", caravanScene.GetMerchantCount());
-                from.SendMessage("Guards: {0}", caravanScene.GetGuardCount());
-            }
+
         }
 
         #endregion
@@ -1356,28 +1267,7 @@ namespace Server.Gumps
                             }
                             break;
 
-                        case 1: // Create Caravan Scene
-                            try
-                            {
-                                // Find a suitable destination for the caravan
-                                Point3D destination = FindCaravanDestination(from.Location, from.Map);
-                                if (destination == Point3D.Zero)
-                                {
-                                    notice = "Could not find a suitable destination for the caravan from this location.";
-                                }
-                                else
-                                {
-                                    PlayerBotScene caravanScene = new Server.Engines.Scenes.MerchantCaravanScene(from.Location, destination, from.Map);
-                                    caravanScene.Initialize(); // Initialize to spawn participants
-                                    director.AddScene(caravanScene);
-                                    notice = String.Format("Caravan scene created with ID {0} at your location with {1} participants.", caravanScene.SceneId, caravanScene.GetParticipantCount());
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                notice = "Error creating caravan scene: " + ex.Message;
-                            }
-                            break;
+
 
                         case 2: // End All Scenes
                             try

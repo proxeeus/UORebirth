@@ -19,7 +19,6 @@ namespace Server.Engines
         public enum BotBehaviorState
         {
             Idle,
-            Traveling,
             Shopping,
             Socializing,
             Banking,
@@ -622,9 +621,31 @@ namespace Server.Engines
             PlayerBotPersona.PlayerBotProfile assignedProfile = DeterminePersonaForRegion(profile.SafetyLevel);
             bot.OverridePersona(assignedProfile);
             
-            // Set large home range to allow travel between regions
+            // Set home and MUCH higher wander range for natural-looking movement
             bot.Home = loc;
-            bot.RangeHome = 20000; // Large range to allow inter-region travel
+            
+            // Set wander range based on safety level - higher ranges for more natural movement
+            switch (profile.SafetyLevel)
+            {
+                case PlayerBotConfigurationManager.SafetyLevel.Safe:
+                    bot.RangeHome = Utility.RandomMinMax(150, 250); // Towns/safe areas
+                    break;
+                case PlayerBotConfigurationManager.SafetyLevel.Dangerous:
+                    bot.RangeHome = Utility.RandomMinMax(200, 300); // Dangerous areas
+                    break;
+                case PlayerBotConfigurationManager.SafetyLevel.Wilderness:
+                    bot.RangeHome = Utility.RandomMinMax(300, 500); // Wilderness areas
+                    break;
+                default:
+                    bot.RangeHome = 200;
+                    break;
+            }
+            
+            // Set AI to wander mode - no destinations, just natural wandering
+            if (bot.AIObject != null)
+            {
+                bot.AIObject.Action = ActionType.Wander;
+            }
             
             bot.MoveToWorld(loc, profile.Map);
 
@@ -641,8 +662,8 @@ namespace Server.Engines
                 if (bot.PlayerBotExperience != null)
                     experience = bot.PlayerBotExperience.ToString();
 
-                Console.WriteLine("[{0}] [PlayerBotDirector] Spawned bot '{1}' ({2} {3}) at {4} in region '{5}' (Safety: {6})", 
-                    GetTimestamp(), bot.Name, experience, persona, loc, profile.Name, profile.SafetyLevel);
+                Console.WriteLine("[{0}] [PlayerBotDirector] Spawned running bot '{1}' ({2} {3}) at {4} in region '{5}' (Safety: {6}, WanderRange: {7})", 
+                    GetTimestamp(), bot.Name, experience, persona, loc, profile.Name, profile.SafetyLevel, bot.RangeHome);
             }
 
             return true;
@@ -723,8 +744,6 @@ namespace Server.Engines
         }
         #endregion
 
-
-
         #region Phase 2: Behavior Management
         private void OnBehaviorTick()
         {
@@ -745,8 +764,8 @@ namespace Server.Engines
                 if (Config.EnableLogging && Config.VerboseBehaviors)
                     Console.WriteLine("[{0}] [PlayerBotDirector] Managing behaviors for {1} bots", GetTimestamp(), allBots.Count);
 
-                // Phase 2 sophisticated behaviors
-                ProcessBotTravel(allBots);
+                // Behavior management: ensure proper wandering, location behaviors, interactions, and events
+                ProcessBotWandering(allBots); // PlayerBots now run automatically during wandering!
                 ProcessLocationSpecificBehaviors(allBots);
                 ProcessBotInteractions(allBots);
                 ProcessDynamicEvents(allBots);
@@ -778,10 +797,9 @@ namespace Server.Engines
             return result;
         }
 
-        private void ProcessBotTravel(List<PlayerBot> allBots)
+        private void ProcessBotWandering(List<PlayerBot> allBots)
         {
-            int localTravelers = 0;
-            int interRegionTravelers = 0;
+            int wanderingBots = 0;
             
             foreach (PlayerBot bot in allBots)
             {
@@ -793,174 +811,17 @@ namespace Server.Engines
                 if (botInfo == null)
                     continue;
 
-                // Check if bot is currently traveling
-                if (botInfo.CurrentState == BotBehaviorState.Traveling)
+                // Ensure bot is in wander mode - the enhanced PlayerBotAI will handle running movement
+                if (bot.AIObject != null && bot.AIObject.Action != ActionType.Wander)
                 {
-                    // Check if bot has reached destination or been traveling too long
-                    if (bot.InRange(botInfo.Destination, 5) || 
-                        DateTime.Now - botInfo.LastStateChange > TimeSpan.FromMinutes(10))
-                    {
-                        // Clear AI destination
-                        if (bot.AIObject != null)
-                        {
-                            PlayerBotAI playerBotAI = bot.AIObject as PlayerBotAI;
-                            if (playerBotAI != null)
-                            {
-                                playerBotAI.ClearDestination();
-                            }
-                        }
-                        
-                        UpdateBotInfo(bot, BotBehaviorState.Idle, Point3D.Zero);
-                        if (Config.EnableLogging && Config.VerboseTravel)
-                            Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' completed travel to {2}", 
-                                GetTimestamp(), bot.Name, botInfo.Destination);
-                    }
-                    continue; // Skip other travel decisions while traveling
-                }
-
-                // Random chance for inter-region travel (long distance)
-                if (Utility.Random(100) < Config.InterRegionTravelChance)
-                {
-                    if (InitiateInterRegionTravel(bot))
-                        interRegionTravelers++;
-                }
-                // Random chance for local travel
-                else if (Utility.Random(100) < Config.TravelChancePercent)
-                {
-                    if (InitiateLocalTravel(bot))
-                        localTravelers++;
+                    bot.AIObject.Action = ActionType.Wander;
+                    wanderingBots++;
                 }
             }
 
-            if (Config.EnableLogging && Config.VerboseTravel && (localTravelers > 0 || interRegionTravelers > 0))
-                Console.WriteLine("[{0}] [PlayerBotDirector] Initiated travel: {1} local, {2} inter-region", 
-                    GetTimestamp(), localTravelers, interRegionTravelers);
-        }
-
-        private bool InitiateInterRegionTravel(PlayerBot bot)
-        {
-            // Find a random region different from current location
-            RegionProfile targetRegion = null;
-            RegionProfile currentRegion = GetBotCurrentRegion(bot);
-            
-            List<RegionProfile> otherRegions = new List<RegionProfile>();
-            foreach (RegionProfile region in m_Regions)
-            {
-                if (region != currentRegion)
-                    otherRegions.Add(region);
-            }
-
-            if (otherRegions.Count == 0)
-                return false;
-
-            targetRegion = otherRegions[Utility.Random(otherRegions.Count)];
-
-            // Find a point of interest in the target region
-            List<PointOfInterest> targetPOIs = new List<PointOfInterest>();
-            foreach (PointOfInterest poi in m_PointsOfInterest)
-            {
-                if (poi.Map == targetRegion.Map && targetRegion.Area.Contains(poi.Location))
-                    targetPOIs.Add(poi);
-            }
-
-            Point3D destination;
-            string destinationName;
-            
-            if (targetPOIs.Count > 0)
-            {
-                PointOfInterest targetPOI = targetPOIs[Utility.Random(targetPOIs.Count)];
-                destination = targetPOI.Location;
-                destinationName = targetPOI.Name;
-            }
-            else
-            {
-                // Fallback to random point in target region
-                destination = new Point3D(
-                    Utility.RandomMinMax(targetRegion.Area.Start.X, targetRegion.Area.End.X),
-                    Utility.RandomMinMax(targetRegion.Area.Start.Y, targetRegion.Area.End.Y),
-                    0
-                );
-                destinationName = targetRegion.Name;
-            }
-
-            UpdateBotInfo(bot, BotBehaviorState.Traveling, destination);
-
-            if (Config.EnableLogging && Config.VerboseTravel)
-                Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' beginning inter-region travel from {2} to {3} ({4})", 
-                    GetTimestamp(), bot.Name, GetBotCurrentRegionName(bot), destinationName, destination);
-
-            // Set AI destination and wander mode
-            if (bot.AIObject != null)
-            {
-                PlayerBotAI playerBotAI = bot.AIObject as PlayerBotAI;
-                if (playerBotAI != null)
-                {
-                    playerBotAI.SetDestination(destination);
-                }
-                bot.AIObject.Action = ActionType.Wander;
-            }
-
-            return true;
-        }
-
-        private bool InitiateLocalTravel(PlayerBot bot)
-        {
-            // Choose a local point of interest or random nearby location
-            Point3D currentLoc = bot.Location;
-            Map map = bot.Map;
-            
-            if (map == null)
-                return false;
-
-            Point3D destination;
-            string destinationName = "nearby area";
-
-            // 60% chance to visit a nearby POI, 40% chance for random travel
-            if (Utility.Random(100) < 60)
-            {
-                List<PointOfInterest> nearbyPOIs = new List<PointOfInterest>();
-                foreach (PointOfInterest poi in m_PointsOfInterest)
-                {
-                    if (poi.Map == map && bot.GetDistanceToSqrt(poi.Location) < 100)
-                        nearbyPOIs.Add(poi);
-                }
-
-                if (nearbyPOIs.Count > 0)
-                {
-                    PointOfInterest targetPOI = nearbyPOIs[Utility.Random(nearbyPOIs.Count)];
-                    destination = targetPOI.Location;
-                    destinationName = targetPOI.Name;
-                }
-                else
-                {
-                    // Fallback to random travel
-                    return InitiateBotTravel(bot);
-                }
-            }
-            else
-            {
-                // Random local travel
-                return InitiateBotTravel(bot);
-            }
-
-            UpdateBotInfo(bot, BotBehaviorState.Traveling, destination);
-
-            if (Config.EnableLogging && Config.VerboseTravel)
-                Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' traveling locally to {2} ({3})", 
-                    GetTimestamp(), bot.Name, destinationName, destination);
-
-            // Set AI destination and wander mode
-            if (bot.AIObject != null)
-            {
-                PlayerBotAI playerBotAI = bot.AIObject as PlayerBotAI;
-                if (playerBotAI != null)
-                {
-                    playerBotAI.SetDestination(destination);
-                }
-                bot.AIObject.Action = ActionType.Wander;
-            }
-
-            return true;
+            if (Config.EnableLogging && Config.VerboseTravel && wanderingBots > 0)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Set {1} bots to enhanced running wander mode", 
+                    GetTimestamp(), wanderingBots);
         }
 
         private void ProcessLocationSpecificBehaviors(List<PlayerBot> allBots)
@@ -974,7 +835,7 @@ namespace Server.Engines
                     continue;
 
                 PlayerBotInfo botInfo = GetBotInfo(bot);
-                if (botInfo == null || botInfo.CurrentState == BotBehaviorState.Traveling)
+                if (botInfo == null)
                     continue;
 
                 // Find nearby POIs
@@ -1259,106 +1120,44 @@ namespace Server.Engines
 
         private void CreateGroupActivity(List<PlayerBot> allBots)
         {
-            // Find groups of bots near each other
-            Dictionary<Point3D, List<PlayerBot>> proximityGroups = new Dictionary<Point3D, List<PlayerBot>>();
-            
-            foreach (PlayerBot bot in allBots)
-            {
-                if (bot.Combatant != null || bot.Controled)
-                    continue;
+            // Select 3-6 bots for a group activity
+            int groupSize = Utility.RandomMinMax(3, Math.Min(6, allBots.Count));
+            List<PlayerBot> selectedBots = new List<PlayerBot>();
+            List<PlayerBot> availableBots = new List<PlayerBot>(allBots);
 
-                Point3D groupKey = new Point3D(
-                    (bot.Location.X / 20) * 20,
-                    (bot.Location.Y / 20) * 20,
-                    0
-                );
-                
-                if (!proximityGroups.ContainsKey(groupKey))
-                    proximityGroups[groupKey] = new List<PlayerBot>();
-                
-                proximityGroups[groupKey].Add(bot);
+            for (int i = 0; i < groupSize && availableBots.Count > 0; i++)
+            {
+                PlayerBot bot = availableBots[Utility.Random(availableBots.Count)];
+                selectedBots.Add(bot);
+                availableBots.Remove(bot);
             }
 
-            foreach (List<PlayerBot> group in proximityGroups.Values)
-            {
-                if (group.Count >= 3) // Need at least 3 bots for group activity
-                {
-                    PlayerBot leader = group[Utility.Random(group.Count)];
-                    
-                    List<string> groupMessages = new List<string>();
-                    groupMessages.Add("Anyone interested in a group venture?");
-                    groupMessages.Add("There's safety in numbers.");
-                    groupMessages.Add("Shall we travel together?");
-                    
-                    string message = groupMessages[Utility.Random(groupMessages.Count)];
-                    leader.SayWithHue(message);
-                    leader.LastSpeechTime = DateTime.Now;
+            if (selectedBots.Count < 3)
+                return; // Need minimum group size
 
-                    if (Config.EnableLogging && Config.VerboseEvents)
-                        Console.WriteLine("[{0}] [PlayerBotDirector] Dynamic event: Group activity initiated by '{1}' with {2} nearby bots", 
-                            GetTimestamp(), leader.Name, group.Count - 1);
-                    
-                    break; // Only one group activity per tick
-                }
+            // Find a central meeting point
+            Point3D centerPoint = selectedBots[0].Location;
+            foreach (PlayerBot bot in selectedBots)
+            {
+                UpdateBotInfo(bot, BotBehaviorState.Socializing, centerPoint);
+                
+                List<string> groupMessages = new List<string>();
+                groupMessages.Add("Shall we travel together for safety?");
+                groupMessages.Add("It's good to have companions on the road.");
+                groupMessages.Add("There's strength in numbers.");
+                
+                string message = groupMessages[Utility.Random(groupMessages.Count)];
+                bot.SayWithHue(message);
+                bot.LastSpeechTime = DateTime.Now;
             }
+
+            if (Config.EnableLogging && Config.VerboseBehaviors)
+                Console.WriteLine("[{0}] [PlayerBotDirector] Created group activity with {1} bots at {2}", 
+                    GetTimestamp(), selectedBots.Count, centerPoint);
         }
         #endregion
 
         #region Helper Methods
-        private bool InitiateBotTravel(PlayerBot bot)
-        {
-            // Choose a random travel destination within the same map (fallback method)
-            Point3D currentLoc = bot.Location;
-            Map map = bot.Map;
-            
-            if (map == null)
-                return false;
-
-            // Generate a random travel destination
-            int distance = Utility.RandomMinMax(Config.MinTravelDistance, Config.MaxTravelDistance);
-            int angle = Utility.Random(360);
-            
-            double radians = angle * Math.PI / 180.0;
-            int deltaX = (int)(Math.Cos(radians) * distance);
-            int deltaY = (int)(Math.Sin(radians) * distance);
-            
-            Point3D destination = new Point3D(
-                currentLoc.X + deltaX,
-                currentLoc.Y + deltaY,
-                map.GetAverageZ(currentLoc.X + deltaX, currentLoc.Y + deltaY)
-            );
-
-            // Validate the destination
-            if (!CanSpawnAt(map, destination))
-            {
-                if (Config.EnableLogging && Config.VerboseTravel)
-                    Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' travel destination {2} is invalid", 
-                        GetTimestamp(), bot.Name, destination);
-                return false;
-            }
-
-            UpdateBotInfo(bot, BotBehaviorState.Traveling, destination);
-
-            // Set the bot's destination (this will be handled by the AI)
-            if (bot.AIObject != null)
-            {
-                PlayerBotAI playerBotAI = bot.AIObject as PlayerBotAI;
-                if (playerBotAI != null)
-                {
-                    playerBotAI.SetDestination(destination);
-                }
-                bot.AIObject.Action = ActionType.Wander;
-                
-                if (Config.EnableLogging && Config.VerboseTravel)
-                    Console.WriteLine("[{0}] [PlayerBotDirector] Bot '{1}' beginning random travel from {2} towards {3} (distance: {4})", 
-                        GetTimestamp(), bot.Name, currentLoc, destination, distance);
-                
-                return true;
-            }
-
-            return false;
-        }
-
         private RegionProfile GetBotCurrentRegion(PlayerBot bot)
         {
             foreach (RegionProfile region in m_Regions)
@@ -1717,9 +1516,6 @@ namespace Server.Engines
                 case PlayerBotScene.SceneType.War:
                     return TryCreateWarScene(region, nearbyPlayers);
                     
-                case PlayerBotScene.SceneType.MerchantCaravan:
-                    return TryCreateMerchantCaravanScene(region, nearbyPlayers);
-                    
                 // Add other scene types here as they're implemented
                 
                 default:
@@ -1738,12 +1534,6 @@ namespace Server.Engines
             if (region.SafetyLevel != PlayerBotConfigurationManager.SafetyLevel.Safe)
             {
                 possible.Add(PlayerBotScene.SceneType.War);
-            }
-            
-            // Merchant caravans - can happen anywhere with enough space
-            if (region.Area.Width >= 50 && region.Area.Height >= 50)
-            {
-                possible.Add(PlayerBotScene.SceneType.MerchantCaravan);
             }
             
             return possible.ToArray();
@@ -1780,41 +1570,6 @@ namespace Server.Engines
         }
 
         /// <summary>
-        /// Try to create a merchant caravan scene
-        /// </summary>
-        private PlayerBotScene TryCreateMerchantCaravanScene(RegionProfile region, List<Mobile> nearbyPlayers)
-        {
-            // Find start and destination points
-            Point3D start = FindSceneLocation(region);
-            if (start == Point3D.Zero)
-                return null;
-
-            // Find a destination in another region or far away in the same region
-            Point3D destination = FindCaravanDestination(region, start);
-            if (destination == Point3D.Zero)
-                return null;
-
-            try
-            {
-                Server.Engines.Scenes.MerchantCaravanScene caravanScene = new Server.Engines.Scenes.MerchantCaravanScene(start, destination, region.Map);
-                
-                if (caravanScene.CanTrigger(region, nearbyPlayers))
-                {
-                    return caravanScene;
-                }
-                else
-                {
-                    return null;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("[PlayerBotDirector] Error creating caravan scene: {0}", ex.Message);
-                return null;
-            }
-        }
-
-        /// <summary>
         /// Find a suitable location for a scene within a region
         /// </summary>
         private Point3D FindSceneLocation(RegionProfile region)
@@ -1828,60 +1583,6 @@ namespace Server.Engines
 
                 if (region.Map.CanSpawnMobile(p.X, p.Y, p.Z))
                     return p;
-            }
-
-            return Point3D.Zero;
-        }
-
-        /// <summary>
-        /// Find a destination for a merchant caravan
-        /// </summary>
-        private Point3D FindCaravanDestination(RegionProfile startRegion, Point3D start)
-        {
-            // Try to find a destination in another region first
-            foreach (RegionProfile otherRegion in m_Regions)
-            {
-                if (otherRegion != startRegion && otherRegion.Map == startRegion.Map)
-                {
-                    Point3D dest = FindSceneLocation(otherRegion);
-                    if (dest != Point3D.Zero)
-                    {
-                        // Make sure it's far enough away
-                        double distance = Math.Sqrt(Math.Pow(start.X - dest.X, 2) + Math.Pow(start.Y - dest.Y, 2));
-                        if (distance >= 100) // At least 100 tiles away
-                        {
-                            // CRITICAL: Check if both points are on the same landmass
-                            if (AreOnSameLandmass(start, dest, startRegion.Map))
-                            {
-                                return dest;
-                            }
-                            else
-                            {
-                                // Cross-island travel detected - skip this destination
-                                if (Config.EnableLogging && Config.VerboseTravel)
-                                {
-                                    Console.WriteLine("[{0}] [PlayerBotDirector] Skipping cross-island caravan destination from {1} to {2}", 
-                                        GetTimestamp(), start, dest);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // If no other region works, find a distant point in the same region
-            for (int i = 0; i < 5; i++)
-            {
-                int x = Utility.RandomMinMax(startRegion.Area.X, startRegion.Area.X + startRegion.Area.Width);
-                int y = Utility.RandomMinMax(startRegion.Area.Y, startRegion.Area.Y + startRegion.Area.Height);
-                int z = startRegion.Map.GetAverageZ(x, y);
-                Point3D p = new Point3D(x, y, z);
-
-                double distance = Math.Sqrt(Math.Pow(start.X - p.X, 2) + Math.Pow(start.Y - p.Y, 2));
-                if (distance >= 50 && startRegion.Map.CanSpawnMobile(p.X, p.Y, p.Z))
-                {
-                    return p;
-                }
             }
 
             return Point3D.Zero;

@@ -16,14 +16,12 @@ namespace Server.Engines
         private const string CONFIG_BASE_PATH = "Data/PlayerBot/";
         private const string REGIONS_FILE = "Regions.cfg";
         private const string POIS_FILE = "PointsOfInterest.cfg";
-        private const string ROUTES_FILE = "TravelRoutes.cfg";
         private const string BEHAVIOR_FILE = "BehaviorSettings.cfg";
         #endregion
 
         #region Configuration Data
         private static Dictionary<string, RegionConfig> m_Regions;
         private static Dictionary<string, POIConfig> m_PointsOfInterest;
-        private static Dictionary<string, RouteConfig> m_TravelRoutes;
         private static BehaviorConfig m_BehaviorSettings;
         private static DateTime m_LastLoadTime;
         #endregion
@@ -31,7 +29,6 @@ namespace Server.Engines
         #region Public Properties
         public static Dictionary<string, RegionConfig> Regions { get { return m_Regions ?? new Dictionary<string, RegionConfig>(); } }
         public static Dictionary<string, POIConfig> PointsOfInterest { get { return m_PointsOfInterest ?? new Dictionary<string, POIConfig>(); } }
-        public static Dictionary<string, RouteConfig> TravelRoutes { get { return m_TravelRoutes ?? new Dictionary<string, RouteConfig>(); } }
         public static BehaviorConfig BehaviorSettings { get { return m_BehaviorSettings ?? new BehaviorConfig(); } }
         public static DateTime LastLoadTime { get { return m_LastLoadTime; } }
         #endregion
@@ -45,11 +42,10 @@ namespace Server.Engines
             Console.WriteLine("[{0}] [PlayerBotConfig] Loading configuration files...", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
             
             try
-            {
-                LoadRegions();
-                LoadPointsOfInterest();
-                LoadTravelRoutes();
-                LoadBehaviorSettings();
+                    {
+            LoadRegions();
+            LoadPointsOfInterest();
+            LoadBehaviorSettings();
                 
                 m_LastLoadTime = DateTime.Now;
                 
@@ -58,8 +54,6 @@ namespace Server.Engines
                     m_Regions.Count, GetActiveRegionCount());
                 Console.WriteLine("[{0}]   - {1} points of interest", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), 
                     m_PointsOfInterest.Count);
-                Console.WriteLine("[{0}]   - {1} travel routes", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), 
-                    m_TravelRoutes.Count);
                 Console.WriteLine("[{0}]   - Behavior settings loaded", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
             }
             catch (Exception ex)
@@ -159,42 +153,7 @@ namespace Server.Engines
             }
         }
 
-        private static void LoadTravelRoutes()
-        {
-            string filePath = Path.Combine(CONFIG_BASE_PATH, ROUTES_FILE);
-            m_TravelRoutes = new Dictionary<string, RouteConfig>();
-            
-            if (!File.Exists(filePath))
-            {
-                Console.WriteLine("[{0}] [PlayerBotConfig] Warning: {1} not found, using defaults", 
-                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), filePath);
-                return;
-            }
 
-            Dictionary<string, Dictionary<string, string>> sections = ParseINIFile(filePath);
-            
-            foreach (KeyValuePair<string, Dictionary<string, string>> section in sections)
-            {
-                try
-                {
-                    RouteConfig route = new RouteConfig();
-                    route.Name = section.Key;
-                    route.From = GetValue(section.Value, "From", "");
-                    route.To = GetValue(section.Value, "To", "");
-                    route.Waypoints = ParseWaypoints(GetValue(section.Value, "Waypoints", ""));
-                    route.TravelTime = ParseInt(GetValue(section.Value, "TravelTime", "10"));
-                    route.Difficulty = ParseDifficulty(GetValue(section.Value, "Difficulty", "Easy"));
-                    route.Map = ParseMap(GetValue(section.Value, "Map", "Felucca"));
-                    
-                    m_TravelRoutes[route.Name] = route;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("[{0}] [PlayerBotConfig] Error parsing route '{1}': {2}", 
-                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), section.Key, ex.Message);
-                }
-            }
-        }
 
         private static void LoadBehaviorSettings()
         {
@@ -225,23 +184,11 @@ namespace Server.Engines
             {
                 Dictionary<string, string> beh = sections["Behavior"];
                 m_BehaviorSettings.BehaviorTickSeconds = ParseInt(GetValue(beh, "BehaviorTickSeconds", "45"));
-                m_BehaviorSettings.TravelChancePercent = ParseInt(GetValue(beh, "TravelChancePercent", "15"));
                 m_BehaviorSettings.InteractionChancePercent = ParseInt(GetValue(beh, "InteractionChancePercent", "25"));
-                m_BehaviorSettings.InterRegionTravelChance = ParseInt(GetValue(beh, "InterRegionTravelChance", "5"));
                 m_BehaviorSettings.ShopVisitChance = ParseInt(GetValue(beh, "ShopVisitChance", "10"));
                 m_BehaviorSettings.DynamicEventChance = ParseInt(GetValue(beh, "DynamicEventChance", "3"));
             }
             
-            // Travel settings
-            if (sections.ContainsKey("Travel"))
-            {
-                Dictionary<string, string> travel = sections["Travel"];
-                m_BehaviorSettings.MinTravelDistance = ParseInt(GetValue(travel, "MinTravelDistance", "10"));
-                m_BehaviorSettings.MaxTravelDistance = ParseInt(GetValue(travel, "MaxTravelDistance", "50"));
-                m_BehaviorSettings.TravelTimeoutMinutes = ParseInt(GetValue(travel, "TravelTimeoutMinutes", "10"));
-                m_BehaviorSettings.LocalTravelPreference = ParseInt(GetValue(travel, "LocalTravelPreference", "60"));
-                m_BehaviorSettings.DestinationRange = ParseInt(GetValue(travel, "DestinationRange", "5"));
-            }
             
             // Interaction settings
             if (sections.ContainsKey("Interaction"))
@@ -406,21 +353,7 @@ namespace Server.Engines
             return Point3D.Zero;
         }
 
-        private static Point3D[] ParseWaypoints(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return new Point3D[0];
-                
-            string[] waypointStrings = value.Split('|');
-            Point3D[] waypoints = new Point3D[waypointStrings.Length];
-            
-            for (int i = 0; i < waypointStrings.Length; i++)
-            {
-                waypoints[i] = ParsePoint3D(waypointStrings[i]);
-            }
-            
-            return waypoints;
-        }
+
 
         private static string[] ParseStringArray(string value)
         {
@@ -456,16 +389,7 @@ namespace Server.Engines
             }
         }
 
-        private static RouteDifficulty ParseDifficulty(string value)
-        {
-            switch (value.ToLower())
-            {
-                case "easy": return RouteDifficulty.Easy;
-                case "medium": return RouteDifficulty.Medium;
-                case "hard": return RouteDifficulty.Hard;
-                default: return RouteDifficulty.Easy;
-            }
-        }
+
 
         private static SafetyLevel ParseSafetyLevel(string value)
         {
@@ -496,7 +420,6 @@ namespace Server.Engines
             // Create minimal default configurations
             m_Regions = new Dictionary<string, RegionConfig>();
             m_PointsOfInterest = new Dictionary<string, POIConfig>();
-            m_TravelRoutes = new Dictionary<string, RouteConfig>();
             m_BehaviorSettings = new BehaviorConfig();
         }
         #endregion
@@ -526,16 +449,7 @@ namespace Server.Engines
             public PlayerBotPersona.PlayerBotProfile ProfilePreference;
         }
 
-        public class RouteConfig
-        {
-            public string Name;
-            public string From;
-            public string To;
-            public Point3D[] Waypoints;
-            public int TravelTime;
-            public RouteDifficulty Difficulty;
-            public Map Map;
-        }
+
 
         public class BehaviorConfig
         {
@@ -547,18 +461,9 @@ namespace Server.Engines
             
             // Behavior
             public int BehaviorTickSeconds = 45;
-            public int TravelChancePercent = 15;
             public int InteractionChancePercent = 25;
-            public int InterRegionTravelChance = 5;
             public int ShopVisitChance = 10;
             public int DynamicEventChance = 3;
-            
-            // Travel
-            public int MinTravelDistance = 10;
-            public int MaxTravelDistance = 50;
-            public int TravelTimeoutMinutes = 10;
-            public int LocalTravelPreference = 60;
-            public int DestinationRange = 5;
             
             // Interaction
             public int InteractionCooldownSeconds = 30;
@@ -596,12 +501,7 @@ namespace Server.Engines
             public bool VerboseEvents = true;
         }
 
-        public enum RouteDifficulty
-        {
-            Easy,
-            Medium,
-            Hard
-        }
+
 
         public enum SafetyLevel
         {
